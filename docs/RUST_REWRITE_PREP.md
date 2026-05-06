@@ -58,6 +58,24 @@ Required behavior:
 - Keep sidecar commands long-running; do not spawn one Rust process per command
   unless explicitly testing.
 
+## Patch Engine Rust Core
+
+`pi-patch-engine` ports the pure line diff and ANSI patch construction logic to
+Rust with a CLI parity harness. Do not route every render frame through the CLI:
+per-frame process startup or JSON IPC would likely erase the Rust speedup.
+
+Current safe use:
+
+- Rust library crate for pure diff/patch logic.
+- CLI only for parity checks and future integration experiments.
+- JS remains the default renderer path until a low-overhead bridge is selected.
+
+Recommended bridge options:
+
+- N-API/native addon for hot per-frame calls.
+- A long-running sidecar only if batching whole frame plans amortizes JSON IPC.
+- WASM only if startup/call overhead benchmarks well inside Node.
+
 ## Verification
 
 For Rust crates:
@@ -79,6 +97,13 @@ For sidecar integration, run the JS smoke test with:
 ```powershell
 $env:PI_SHELL_EXECUTOR_COMMAND = "<path-to-sidecar-exe>"
 npm test
+```
+
+For patch engine parity:
+
+```powershell
+$env:PI_PATCH_ENGINE_COMMAND = "<path-to-pi-patch-engine-exe>"
+node scripts/check-rust-patch-engine-parity.mjs
 ```
 
 ## Notes From Current Rust Research
