@@ -1,7 +1,12 @@
 import { classifyEvent, getMessageRole } from "./event-types.mjs";
 import { getPlanRenderReason } from "./plan-registry.mjs";
+import { runRustCoreValue } from "../rust-core-shadow/runner.mjs";
 
 export function planEventActions(event, snapshot = {}) {
+    const rust = runRustCoreValue({ commandEnv: "PI_EVENT_CORE_COMMAND", op: "planEventActions", input: { ...event, snapshot } });
+    if (rust.ok) {
+        return rust.value;
+    }
     const type = event?.type;
     const role = getMessageRole(event);
     const actions = ["footer:invalidate"];
