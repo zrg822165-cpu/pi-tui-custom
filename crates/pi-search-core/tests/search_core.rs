@@ -1,6 +1,7 @@
 use pi_search_core::{
-    FdArgsInput, RipgrepArgsInput, TruncateHeadInput, TruncateLineInput, build_fd_args,
-    build_ripgrep_args, truncate_head, truncate_line,
+    FdArgsInput, FormatFindResultsInput, FormatTextSearchInput, RipgrepArgsInput,
+    TruncateHeadInput, TruncateLineInput, build_fd_args, build_ripgrep_args, format_find_results,
+    format_text_search, truncate_head, truncate_line,
 };
 
 #[test]
@@ -74,4 +75,33 @@ fn truncate_line_uses_character_limit() {
 
     assert_eq!(result.text, "abc... [truncated]");
     assert!(result.was_truncated);
+}
+
+#[test]
+fn format_text_search_adds_limit_and_line_notices() {
+    let result = format_text_search(&FormatTextSearchInput {
+        output_lines: vec!["a:1: hit".into()],
+        effective_limit: 1,
+        match_limit_reached: true,
+        lines_truncated: true,
+        default_max_bytes: Some(1024),
+        grep_max_line_length: Some(500),
+    });
+
+    assert!(result.content.contains("1 matches limit reached"));
+    assert!(result.content.contains("Some lines truncated to 500 chars"));
+    assert!(result.details.is_some());
+}
+
+#[test]
+fn format_find_results_reports_empty_results() {
+    let result = format_find_results(&FormatFindResultsInput {
+        relativized: vec![],
+        effective_limit: 10,
+        include_refine_notice: true,
+        default_max_bytes: Some(1024),
+    });
+
+    assert_eq!(result.content, "No files found matching pattern");
+    assert!(result.details.is_none());
 }

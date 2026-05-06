@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 pub const DEFAULT_MAX_LINES: usize = 2000;
 pub const DEFAULT_MAX_BYTES: usize = 50 * 1024;
 pub const GREP_MAX_LINE_LENGTH: usize = 500;
+pub const JS_MAX_SAFE_INTEGER: usize = 9_007_199_254_740_991;
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "op", content = "input", rename_all = "camelCase")]
@@ -12,6 +13,9 @@ pub enum Operation {
     TruncateHead(TruncateHeadInput),
     TruncateLine(TruncateLineInput),
     FormatSize(FormatSizeInput),
+    FormatTextSearch(FormatTextSearchInput),
+    FormatFindResults(FormatFindResultsInput),
+    FormatDirectoryResults(FormatDirectoryResultsInput),
 }
 
 #[derive(Debug, Serialize)]
@@ -21,6 +25,7 @@ pub enum OperationResult {
     Truncation(Truncation),
     TruncatedLine(TruncatedLine),
     Text(String),
+    FormattedOutput(FormattedOutput),
 }
 
 pub fn execute(operation: Operation) -> OperationResult {
@@ -30,6 +35,15 @@ pub fn execute(operation: Operation) -> OperationResult {
         Operation::TruncateHead(input) => OperationResult::Truncation(truncate_head(&input)),
         Operation::TruncateLine(input) => OperationResult::TruncatedLine(truncate_line(&input)),
         Operation::FormatSize(input) => OperationResult::Text(format_size(input.bytes)),
+        Operation::FormatTextSearch(input) => {
+            OperationResult::FormattedOutput(format_text_search(&input))
+        }
+        Operation::FormatFindResults(input) => {
+            OperationResult::FormattedOutput(format_find_results(&input))
+        }
+        Operation::FormatDirectoryResults(input) => {
+            OperationResult::FormattedOutput(format_directory_results(&input))
+        }
     }
 }
 
@@ -245,5 +259,196 @@ pub fn format_size(bytes: usize) -> String {
         format!("{:.1}KB", bytes as f64 / 1024.0)
     } else {
         format!("{:.1}MB", bytes as f64 / (1024.0 * 1024.0))
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FormatTextSearchInput {
+    pub output_lines: Vec<String>,
+    pub effective_limit: usize,
+    pub match_limit_reached: bool,
+    pub lines_truncated: bool,
+    #[serde(default)]
+    pub default_max_bytes: Option<usize>,
+    #[serde(default)]
+    pub grep_max_line_length: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FormatFindResultsInput {
+    pub relativized: Vec<String>,
+    pub effective_limit: usize,
+    pub include_refine_notice: bool,
+    #[serde(default)]
+    pub default_max_bytes: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FormatDirectoryResultsInput {
+    pub results: Vec<String>,
+    pub limit: usize,
+    pub entry_limit_reached: bool,
+    #[serde(default)]
+    pub default_max_bytes: Option<usize>,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FormattedOutput {
+    pub content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<serde_json::Value>,
+}
+
+pub fn format_text_search(input: &FormatTextSearchInput) -> FormattedOutput {
+    let raw_output = input.output_lines.join("\n");
+    let truncation = truncate_formatter_output(&raw_output, input.default_max_bytes);
+    let mut output = truncation.content.clone();
+    let mut details = serde_json::Map::new();
+    let mut notices = Vec::new();
+
+    if input.match_limit_reached {
+        notices.push(format!(
+            "{} matches limit reached. Use limit={} for more, or refine pattern",
+            input.effective_limit,
+            input.effective_limit * 2
+        ));
+        details.insert(
+            "matchLimitReached".to_owned(),
+            serde_json::json!(input.effective_limit),
+        );
+    }
+    if truncation.truncated {
+        notices.push(format!(
+            "{} limit reached",
+            max_bytes_label(input.default_max_bytes)
+        ));
+        details.insert("truncation".to_owned(), serde_json::json!(truncation));
+    }
+    if input.lines_truncated {
+        notices.push(format!(
+            "Some lines truncated to {} chars. Use read tool to see full lines",
+            input.grep_max_line_length.unwrap_or(GREP_MAX_LINE_LENGTH)
+        ));
+        details.insert("linesTruncated".to_owned(), serde_json::json!(true));
+    }
+    append_notices(&mut output, &notices);
+    formatted(output, details)
+}
+
+pub fn format_find_results(input: &FormatFindResultsInput) -> FormattedOutput {
+    if input.relativized.is_empty() {
+        return FormattedOutput {
+            content: "No files found matching pattern".to_owned(),
+            details: None,
+        };
+    }
+
+    let result_limit_reached = input.relativized.len() >= input.effective_limit;
+    let raw_output = input.relativized.join("\n");
+    let truncation = truncate_formatter_output(&raw_output, input.default_max_bytes);
+    let mut output = truncation.content.clone();
+    let mut details = serde_json::Map::new();
+    let mut notices = Vec::new();
+
+    if result_limit_reached {
+        let suffix = if input.include_refine_notice {
+            format!(
+                ". Use limit={} for more, or refine pattern",
+                input.effective_limit * 2
+            )
+        } else {
+            String::new()
+        };
+        notices.push(format!(
+            "{} results limit reached{}",
+            input.effective_limit, suffix
+        ));
+        details.insert(
+            "resultLimitReached".to_owned(),
+            serde_json::json!(input.effective_limit),
+        );
+    }
+    if truncation.truncated {
+        notices.push(format!(
+            "{} limit reached",
+            max_bytes_label(input.default_max_bytes)
+        ));
+        details.insert("truncation".to_owned(), serde_json::json!(truncation));
+    }
+    append_notices(&mut output, &notices);
+    formatted(output, details)
+}
+
+pub fn format_directory_results(input: &FormatDirectoryResultsInput) -> FormattedOutput {
+    if input.results.is_empty() {
+        return FormattedOutput {
+            content: "(empty directory)".to_owned(),
+            details: None,
+        };
+    }
+
+    let raw_output = input.results.join("\n");
+    let truncation = truncate_formatter_output(&raw_output, input.default_max_bytes);
+    let mut output = truncation.content.clone();
+    let mut details = serde_json::Map::new();
+    let mut notices = Vec::new();
+
+    if input.entry_limit_reached {
+        notices.push(format!(
+            "{} entries limit reached. Use limit={} for more",
+            input.limit,
+            input.limit * 2
+        ));
+        details.insert(
+            "entryLimitReached".to_owned(),
+            serde_json::json!(input.limit),
+        );
+    }
+    if truncation.truncated {
+        notices.push(format!(
+            "{} limit reached",
+            max_bytes_label(input.default_max_bytes)
+        ));
+        details.insert("truncation".to_owned(), serde_json::json!(truncation));
+    }
+    append_notices(&mut output, &notices);
+    formatted(output, details)
+}
+
+fn truncate_formatter_output(raw_output: &str, default_max_bytes: Option<usize>) -> Truncation {
+    truncate_head(&TruncateHeadInput {
+        content: raw_output.to_owned(),
+        max_lines: Some(JS_MAX_SAFE_INTEGER),
+        max_bytes: Some(default_max_bytes.unwrap_or(DEFAULT_MAX_BYTES)),
+    })
+}
+
+fn max_bytes_label(default_max_bytes: Option<usize>) -> String {
+    default_max_bytes.map_or_else(|| "output".to_owned(), format_size)
+}
+
+fn append_notices(output: &mut String, notices: &[String]) {
+    if !notices.is_empty() {
+        output.push_str("\n\n[");
+        output.push_str(&notices.join(". "));
+        output.push(']');
+    }
+}
+
+fn formatted(
+    content: String,
+    details: serde_json::Map<String, serde_json::Value>,
+) -> FormattedOutput {
+    FormattedOutput {
+        content,
+        details: if details.is_empty() {
+            None
+        } else {
+            Some(serde_json::Value::Object(details))
+        },
     }
 }

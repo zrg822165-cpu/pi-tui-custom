@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { SearchQueryBuilder } from "../search-indexer/search-query-builder.mjs";
+import { SearchResultFormatter } from "../search-indexer/search-result-formatter.mjs";
 import { formatSize, truncateHead, truncateLine } from "../node_modules/@mariozechner/pi-coding-agent/dist/core/tools/truncate.js";
 
 const exe = process.env.PI_SEARCH_CORE_COMMAND;
@@ -8,6 +9,12 @@ if (!exe) {
 }
 
 const queryBuilder = new SearchQueryBuilder();
+const formatter = new SearchResultFormatter({
+    truncateHead,
+    formatSize,
+    defaultMaxBytes: 50 * 1024,
+    grepMaxLineLength: 500,
+});
 
 function rust(op, input) {
     const result = spawnSync(exe, {
@@ -87,6 +94,42 @@ const cases = [
     ["formatSize", {
         bytes: 1536,
     }, ({ bytes }) => formatSize(bytes)],
+    ["formatTextSearch", {
+        outputLines: ["src/a.js:1: hit"],
+        effectiveLimit: 1,
+        matchLimitReached: true,
+        linesTruncated: true,
+        defaultMaxBytes: 50 * 1024,
+        grepMaxLineLength: 500,
+    }, ({ outputLines, effectiveLimit, matchLimitReached, linesTruncated }) => formatter.formatTextSearch(outputLines, {
+        effectiveLimit,
+        matchLimitReached,
+        linesTruncated,
+    })],
+    ["formatFindResults", {
+        relativized: ["a.js", "b.js"],
+        effectiveLimit: 2,
+        includeRefineNotice: true,
+        defaultMaxBytes: 50 * 1024,
+    }, ({ relativized, effectiveLimit, includeRefineNotice }) => formatter.formatFindResults(relativized, effectiveLimit, includeRefineNotice)],
+    ["formatFindResults", {
+        relativized: [],
+        effectiveLimit: 2,
+        includeRefineNotice: true,
+        defaultMaxBytes: 50 * 1024,
+    }, ({ relativized, effectiveLimit, includeRefineNotice }) => formatter.formatFindResults(relativized, effectiveLimit, includeRefineNotice)],
+    ["formatDirectoryResults", {
+        results: ["a.js", "dir/"],
+        limit: 2,
+        entryLimitReached: true,
+        defaultMaxBytes: 50 * 1024,
+    }, ({ results, limit, entryLimitReached }) => formatter.formatDirectoryResults(results, limit, entryLimitReached)],
+    ["formatDirectoryResults", {
+        results: [],
+        limit: 2,
+        entryLimitReached: false,
+        defaultMaxBytes: 50 * 1024,
+    }, ({ results, limit, entryLimitReached }) => formatter.formatDirectoryResults(results, limit, entryLimitReached)],
 ];
 
 for (const [name, input, expectedFn] of cases) {
