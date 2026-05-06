@@ -180,6 +180,27 @@ $env:PI_EVENT_CORE_COMMAND = "<path-to-pi-event-core-exe>"
 node scripts/check-rust-event-core-parity.mjs
 ```
 
+## Transcript Core Rust Migration
+
+`pi-transcript-core` ports transcript policy helpers that affect visible task
+feedback without taking ownership of UI components:
+
+- visible transcript line-budget calculation;
+- user text extraction from mixed message content;
+- visible-text/tool-call detection;
+- compaction status copy;
+- assistant abort/error tool-result copy.
+
+JS still owns TUI components, markdown rendering, skill block rendering, chat
+container mutation, and extension message renderers.
+
+Verification:
+
+```powershell
+$env:PI_TRANSCRIPT_CORE_COMMAND = "<path-to-pi-transcript-core-exe>"
+node scripts/check-rust-transcript-core-parity.mjs
+```
+
 ## Notes From Current Rust Research
 
 - Rust 1.95.0 is the current local stable and should be used as the migration

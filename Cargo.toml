@@ -6,6 +6,7 @@ members = [
     "crates/pi-queue-core",
     "crates/pi-search-core",
     "crates/pi-shell-executor",
+    "crates/pi-transcript-core",
 ]
 
 [workspace.package]
