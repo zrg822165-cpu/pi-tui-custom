@@ -1,0 +1,10 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/pi-shell-executor",
+]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.95"
+license = "ISC"
