@@ -156,6 +156,27 @@ $env:PI_QUEUE_CORE_COMMAND = "<path-to-pi-queue-core-exe>"
 node scripts/check-rust-queue-core-parity.mjs
 ```
 
+## Event Core Rust Migration
+
+`pi-event-core` ports the serializable event action planner. This improves the
+reliability of model execution feedback because agent/message/tool events map to
+stable side-effect intent before JS performs UI and extension work.
+
+Current boundary:
+
+- Rust owns event classification and action-plan construction.
+- JS still owns event intake ordering, event bus listeners, host side effects,
+  and extension integration.
+- Do not move concrete UI mutations into Rust; keep the action plan serializable
+  and host-neutral.
+
+Verification:
+
+```powershell
+$env:PI_EVENT_CORE_COMMAND = "<path-to-pi-event-core-exe>"
+node scripts/check-rust-event-core-parity.mjs
+```
+
 ## Notes From Current Rust Research
 
 - Rust 1.95.0 is the current local stable and should be used as the migration
