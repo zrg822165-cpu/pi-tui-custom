@@ -114,6 +114,27 @@ $env:PI_PATCH_ENGINE_COMMAND = "<path-to-pi-patch-engine-exe>"
 node scripts/check-rust-patch-engine-parity.mjs
 ```
 
+## Search Core Rust Migration
+
+`pi-search-core` ports stable search helper logic that affects model task
+quality:
+
+- ripgrep/fd argument construction.
+- output truncation metadata compatible with existing tool output policy.
+- grep line truncation.
+- human-readable size labels.
+
+This boundary matters for model capability because search results and truncation
+notices shape what context the model sees next. Keep the JS tool integration in
+place while moving deterministic formatting and query planning into Rust.
+
+Verification:
+
+```powershell
+$env:PI_SEARCH_CORE_COMMAND = "<path-to-pi-search-core-exe>"
+node scripts/check-rust-search-core-parity.mjs
+```
+
 ## Notes From Current Rust Research
 
 - Rust 1.95.0 is the current local stable and should be used as the migration

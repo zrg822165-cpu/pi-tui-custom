@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/pi-patch-engine",
+    "crates/pi-search-core",
     "crates/pi-shell-executor",
 ]
 
