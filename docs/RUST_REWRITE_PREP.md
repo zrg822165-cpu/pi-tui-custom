@@ -135,6 +135,17 @@ $env:PI_SEARCH_CORE_COMMAND = "<path-to-pi-search-core-exe>"
 node scripts/check-rust-search-core-parity.mjs
 ```
 
+Shadow mode:
+
+```powershell
+$env:PI_RUST_SHADOW = "1"
+$env:PI_SEARCH_CORE_COMMAND = "<path-to-pi-search-core-exe>"
+```
+
+Search query construction now supports shadow checking. JS remains authoritative;
+Rust output is compared and mismatches are reported to stderr. Set
+`PI_RUST_SHADOW_STRICT=1` in smoke tests to throw on mismatches.
+
 ## Queue Core Rust Migration
 
 `pi-queue-core` ports deterministic queue decisions that affect long-running

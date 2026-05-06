@@ -1,3 +1,5 @@
+import { runRustShadow } from "../rust-core-shadow/runner.mjs";
+
 export class SearchQueryBuilder {
     buildRipgrepArgs({ pattern, searchPath, glob, ignoreCase, literal }) {
         const args = ["--json", "--line-number", "--color=never", "--hidden"];
@@ -8,6 +10,13 @@ export class SearchQueryBuilder {
         if (glob)
             args.push("--glob", glob);
         args.push("--", pattern, searchPath);
+        runRustShadow({
+            name: "search.buildRipgrepArgs",
+            commandEnv: "PI_SEARCH_CORE_COMMAND",
+            op: "buildRipgrepArgs",
+            input: { pattern, searchPath, glob, ignoreCase, literal },
+            jsValue: args,
+        });
         return args;
     }
     buildFdArgs({ pattern, searchPath, limit }) {
@@ -27,6 +36,13 @@ export class SearchQueryBuilder {
             }
         }
         args.push("--", effectivePattern, searchPath);
+        runRustShadow({
+            name: "search.buildFdArgs",
+            commandEnv: "PI_SEARCH_CORE_COMMAND",
+            op: "buildFdArgs",
+            input: { pattern, searchPath, limit },
+            jsValue: args,
+        });
         return args;
     }
 }
