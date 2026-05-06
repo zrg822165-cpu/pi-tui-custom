@@ -18,6 +18,7 @@ pub enum Operation {
     FormatDirectoryResults(FormatDirectoryResultsInput),
     FormatSingleLineContext(FormatSingleLineContextInput),
     FormatBlockContext(FormatBlockContextInput),
+    ParseRipgrepJsonLine(ParseRipgrepJsonLineInput),
 }
 
 #[derive(Debug, Serialize)]
@@ -30,6 +31,7 @@ pub enum OperationResult {
     FormattedOutput(FormattedOutput),
     ContextLine(ContextLine),
     ContextBlock(ContextBlock),
+    RipgrepJsonLine(RipgrepJsonLine),
 }
 
 pub fn execute(operation: Operation) -> OperationResult {
@@ -53,6 +55,9 @@ pub fn execute(operation: Operation) -> OperationResult {
         }
         Operation::FormatBlockContext(input) => {
             OperationResult::ContextBlock(format_block_context(&input))
+        }
+        Operation::ParseRipgrepJsonLine(input) => {
+            OperationResult::RipgrepJsonLine(parse_ripgrep_json_line(&input))
         }
     }
 }
@@ -571,5 +576,75 @@ pub fn format_block_context(input: &FormatBlockContextInput) -> ContextBlock {
     ContextBlock {
         lines,
         lines_truncated,
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ParseRipgrepJsonLineInput {
+    pub line: String,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RipgrepJsonLine {
+    pub is_match_event: bool,
+    #[serde(rename = "match")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub match_result: Option<RipgrepMatch>,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RipgrepMatch {
+    pub file_path: String,
+    pub line_number: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line_text: Option<String>,
+}
+
+pub fn parse_ripgrep_json_line(input: &ParseRipgrepJsonLineInput) -> RipgrepJsonLine {
+    if input.line.trim().is_empty() {
+        return no_ripgrep_match_event();
+    }
+
+    let Ok(event) = serde_json::from_str::<serde_json::Value>(&input.line) else {
+        return no_ripgrep_match_event();
+    };
+    if event.get("type").and_then(serde_json::Value::as_str) != Some("match") {
+        return no_ripgrep_match_event();
+    }
+
+    let data = event.get("data");
+    let file_path = data
+        .and_then(|data| data.get("path"))
+        .and_then(|path| path.get("text"))
+        .and_then(serde_json::Value::as_str);
+    let line_number = data
+        .and_then(|data| data.get("line_number"))
+        .and_then(serde_json::Value::as_u64);
+    let line_text = data
+        .and_then(|data| data.get("lines"))
+        .and_then(|lines| lines.get("text"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned);
+
+    RipgrepJsonLine {
+        is_match_event: true,
+        match_result: file_path
+            .filter(|value| !value.is_empty())
+            .zip(line_number)
+            .map(|(file_path, line_number)| RipgrepMatch {
+                file_path: file_path.to_owned(),
+                line_number,
+                line_text,
+            }),
+    }
+}
+
+fn no_ripgrep_match_event() -> RipgrepJsonLine {
+    RipgrepJsonLine {
+        is_match_event: false,
+        match_result: None,
     }
 }

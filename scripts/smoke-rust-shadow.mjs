@@ -1,5 +1,6 @@
 import { SearchQueryBuilder } from "../search-indexer/search-query-builder.mjs";
 import { SearchContextFormatter } from "../search-indexer/search-context-formatter.mjs";
+import { parseRipgrepJsonLine } from "../search-indexer/search-process-adapter.mjs";
 import { SearchResultFormatter } from "../search-indexer/search-result-formatter.mjs";
 import { formatSize, truncateHead, truncateLine } from "../node_modules/@mariozechner/pi-coding-agent/dist/core/tools/truncate.js";
 
@@ -68,6 +69,14 @@ const block = await contextFormatter.formatBlock({
     contextValue: 1,
     isDirectory: true,
 });
+const parsedLine = parseRipgrepJsonLine(JSON.stringify({
+    type: "match",
+    data: {
+        path: { text: "src/main.rs" },
+        line_number: 2,
+        lines: { text: "two\n" },
+    },
+}));
 
 console.log(JSON.stringify({
     ok: true,
@@ -78,4 +87,5 @@ console.log(JSON.stringify({
     directoryResults,
     singleLine,
     block,
+    parsedLine,
 }, null, 2));

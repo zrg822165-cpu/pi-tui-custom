@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { SearchQueryBuilder } from "../search-indexer/search-query-builder.mjs";
 import { SearchContextFormatter } from "../search-indexer/search-context-formatter.mjs";
+import { parseRipgrepJsonLine } from "../search-indexer/search-process-adapter.mjs";
 import { SearchResultFormatter } from "../search-indexer/search-result-formatter.mjs";
 import { formatSize, truncateHead, truncateLine } from "../node_modules/@mariozechner/pi-coding-agent/dist/core/tools/truncate.js";
 
@@ -203,6 +204,37 @@ const cases = [
         contextValue,
         isDirectory: true,
     })],
+    ["parseRipgrepJsonLine", {
+        line: JSON.stringify({
+            type: "match",
+            data: {
+                path: { text: "src/main.rs" },
+                line_number: 7,
+                lines: { text: "fn main()\n" },
+            },
+        }),
+    }, ({ line }) => parseRipgrepJsonLine(line)],
+    ["parseRipgrepJsonLine", {
+        line: JSON.stringify({
+            type: "match",
+            data: {
+                path: { text: "src/main.rs" },
+                line_number: 8,
+            },
+        }),
+    }, ({ line }) => parseRipgrepJsonLine(line)],
+    ["parseRipgrepJsonLine", {
+        line: JSON.stringify({
+            type: "context",
+            data: {
+                path: { text: "src/main.rs" },
+                line_number: 9,
+            },
+        }),
+    }, ({ line }) => parseRipgrepJsonLine(line)],
+    ["parseRipgrepJsonLine", {
+        line: "not json",
+    }, ({ line }) => parseRipgrepJsonLine(line)],
 ];
 
 for (const [name, input, expectedFn] of cases) {

@@ -1,8 +1,9 @@
 use pi_search_core::{
     FdArgsInput, FormatBlockContextInput, FormatFindResultsInput, FormatSingleLineContextInput,
-    FormatTextSearchInput, RipgrepArgsInput, TruncateHeadInput, TruncateLineInput, build_fd_args,
-    build_ripgrep_args, format_block_context, format_find_results, format_single_line_context,
-    format_text_search, truncate_head, truncate_line,
+    FormatTextSearchInput, ParseRipgrepJsonLineInput, RipgrepArgsInput, TruncateHeadInput,
+    TruncateLineInput, build_fd_args, build_ripgrep_args, format_block_context,
+    format_find_results, format_single_line_context, format_text_search, parse_ripgrep_json_line,
+    truncate_head, truncate_line,
 };
 
 #[test]
@@ -139,4 +140,32 @@ fn format_block_context_marks_surrounding_lines() {
         ]
     );
     assert!(!result.lines_truncated);
+}
+
+#[test]
+fn parse_ripgrep_json_line_extracts_match_event() {
+    let result = parse_ripgrep_json_line(&ParseRipgrepJsonLineInput {
+        line: r#"{"type":"match","data":{"path":{"text":"src/main.rs"},"line_number":7,"lines":{"text":"fn main()\n"}}}"#.into(),
+    });
+
+    assert!(result.is_match_event);
+    let matched = result.match_result.expect("expected match fields");
+    assert_eq!(matched.file_path, "src/main.rs");
+    assert_eq!(matched.line_number, 7);
+    assert_eq!(matched.line_text.as_deref(), Some("fn main()\n"));
+}
+
+#[test]
+fn parse_ripgrep_json_line_ignores_invalid_and_non_match_events() {
+    let invalid = parse_ripgrep_json_line(&ParseRipgrepJsonLineInput {
+        line: "not json".into(),
+    });
+    let context = parse_ripgrep_json_line(&ParseRipgrepJsonLineInput {
+        line: r#"{"type":"context","data":{"path":{"text":"src/main.rs"}}}"#.into(),
+    });
+
+    assert!(!invalid.is_match_event);
+    assert!(invalid.match_result.is_none());
+    assert!(!context.is_match_event);
+    assert!(context.match_result.is_none());
 }

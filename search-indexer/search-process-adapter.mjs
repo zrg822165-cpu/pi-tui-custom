@@ -1,4 +1,36 @@
 import { runProcessLines } from "../shell-executor/index.mjs";
+import { runRustShadow } from "../rust-core-shadow/runner.mjs";
+
+export function parseRipgrepJsonLine(line) {
+    if (!line.trim()) {
+        return { isMatchEvent: false, match: undefined };
+    }
+    let event;
+    try {
+        event = JSON.parse(line);
+    }
+    catch {
+        return { isMatchEvent: false, match: undefined };
+    }
+    if (event.type !== "match") {
+        return { isMatchEvent: false, match: undefined };
+    }
+    const filePath = event.data?.path?.text;
+    const lineNumber = event.data?.line_number;
+    const lineText = event.data?.lines?.text;
+    const result = {
+        isMatchEvent: true,
+        match: filePath && typeof lineNumber === "number" ? { filePath, lineNumber, lineText } : undefined,
+    };
+    runRustShadow({
+        name: "search.parseRipgrepJsonLine",
+        commandEnv: "PI_SEARCH_CORE_COMMAND",
+        op: "parseRipgrepJsonLine",
+        input: { line },
+        jsValue: result,
+    });
+    return result;
+}
 
 export class SearchProcessAdapter {
     ensureTool;
@@ -37,26 +69,18 @@ export class SearchProcessAdapter {
         const processResult = await runProcessLines(rgPath, args, {
             signal: abortController.signal,
             onStdoutLine: (line) => {
-                if (!line.trim() || matchCount >= limit)
+                if (matchCount >= limit)
                     return;
-                let event;
-                try {
-                    event = JSON.parse(line);
-                }
-                catch {
+                const parsed = parseRipgrepJsonLine(line);
+                if (!parsed.isMatchEvent) {
                     return;
                 }
-                if (event.type === "match") {
-                    matchCount++;
-                    const filePath = event.data?.path?.text;
-                    const lineNumber = event.data?.line_number;
-                    const lineText = event.data?.lines?.text;
-                    if (filePath && typeof lineNumber === "number")
-                        matches.push({ filePath, lineNumber, lineText });
-                    if (matchCount >= limit) {
-                        matchLimitReached = true;
-                        stopChild(true);
-                    }
+                matchCount++;
+                if (parsed.match)
+                    matches.push(parsed.match);
+                if (matchCount >= limit) {
+                    matchLimitReached = true;
+                    stopChild(true);
                 }
             },
         }).catch((error) => {
