@@ -8,6 +8,7 @@ members = [
     "crates/pi-shell-executor",
     "crates/pi-transcript-core",
     "crates/pi-ui-core",
+    "crates/pi-core-native",
 ]
 
 [workspace.package]

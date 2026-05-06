@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { runNativeCoreValue } from "./native-loader.mjs";
 
 const DEFAULT_TIMEOUT_MS = 2000;
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -13,6 +14,15 @@ const COMMAND_ENV_TO_EXE = {
     PI_SEARCH_CORE_COMMAND: "pi-search-core.exe",
     PI_TRANSCRIPT_CORE_COMMAND: "pi-transcript-core.exe",
     PI_UI_CORE_COMMAND: "pi-ui-core.exe",
+};
+
+const COMMAND_ENV_TO_CORE = {
+    PI_EVENT_CORE_COMMAND: "event",
+    PI_PATCH_ENGINE_COMMAND: "patch",
+    PI_QUEUE_CORE_COMMAND: "queue",
+    PI_SEARCH_CORE_COMMAND: "search",
+    PI_TRANSCRIPT_CORE_COMMAND: "transcript",
+    PI_UI_CORE_COMMAND: "ui",
 };
 
 function isEnabled() {
@@ -83,6 +93,18 @@ export function runRustShadow({ name, commandEnv, op, input, jsValue }) {
 export function runRustCoreValue({ commandEnv, op, input, timeoutMs }) {
     if (process.env.PI_RUST_CORE === "0") {
         return { ok: false, skipped: "disabled" };
+    }
+    if (process.env.PI_RUST_BRIDGE !== "cli") {
+        const core = COMMAND_ENV_TO_CORE[commandEnv];
+        if (core) {
+            const native = runNativeCoreValue({ core, op, input });
+            if (native.ok || process.env.PI_RUST_BRIDGE === "native") {
+                return native;
+            }
+        }
+    }
+    if (process.env.PI_RUST_BRIDGE === "native") {
+        return { ok: false, skipped: "native_unavailable" };
     }
     const command = resolveCommand(commandEnv);
     if (!command) {
