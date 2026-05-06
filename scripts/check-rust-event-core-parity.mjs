@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { planEventActions } from "../event-state-runtime/event-action-planner.mjs";
+import { EventStateMachine } from "../event-state-runtime/state-machine.mjs";
 
 const exe = process.env.PI_EVENT_CORE_COMMAND;
 if (!exe) {
@@ -9,6 +10,18 @@ if (!exe) {
 function rust(event, snapshot = {}) {
     const result = spawnSync(exe, {
         input: JSON.stringify({ op: "planEventActions", input: { ...event, snapshot } }),
+        encoding: "utf8",
+        stdio: ["pipe", "pipe", "pipe"],
+    });
+    if (result.status !== 0) {
+        throw new Error(`Rust event core failed: ${result.stderr}`);
+    }
+    return JSON.parse(result.stdout).value;
+}
+
+function rustSequence(events, startNow = 1000, nowStep = 10) {
+    const result = spawnSync(exe, {
+        input: JSON.stringify({ op: "applyEventSequence", input: { events, startNow, nowStep } }),
         encoding: "utf8",
         stdio: ["pipe", "pipe", "pipe"],
     });
@@ -59,4 +72,35 @@ for (const [event, snapshot] of cases) {
     assertEqual(event.type, rust(event, snapshot), planEventActions(event, snapshot));
 }
 
-console.log(JSON.stringify({ ok: true, checked: cases.length }, null, 2));
+const sequenceEvents = [
+    { type: "agent_start" },
+    { type: "message_start", message: { id: "a1", role: "assistant" } },
+    { type: "message_update", message: { id: "a1", role: "assistant", parts: [{ type: "text", text: "hello" }] } },
+    { type: "tool_execution_start", toolCallId: "t1", toolName: "bash" },
+    { type: "tool_execution_update", toolCallId: "t1" },
+    { type: "tool_execution_end", toolCallId: "t1", isError: false },
+    { type: "message_end", message: { id: "a1", role: "assistant", stopReason: "end_turn" } },
+    { type: "agent_end" },
+];
+let now = 1000;
+const machine = new EventStateMachine({ now: () => {
+    const value = now;
+    now += 10;
+    return value;
+} });
+const jsTransitions = sequenceEvents.map((event) => {
+    const transition = machine.apply(event);
+    return {
+        sequence: transition.sequence,
+        eventType: transition.eventType,
+        eventGroup: transition.eventGroup,
+        phase: transition.phase,
+        previousPhase: transition.previousPhase,
+        phaseHint: transition.phaseHint,
+        actions: transition.actions,
+        snapshot: transition.snapshot,
+    };
+});
+assertEqual("applyEventSequence", rustSequence(sequenceEvents), jsTransitions);
+
+console.log(JSON.stringify({ ok: true, checked: cases.length + 1 }, null, 2));

@@ -169,6 +169,9 @@ Current boundary:
   and extension integration.
 - Do not move concrete UI mutations into Rust; keep the action plan serializable
   and host-neutral.
+- Rust also includes a parity-tested lifecycle state-machine core for ordered
+  agent/message/tool/stream phase snapshots. JS still owns source subscription
+  and event bus dispatch ordering.
 
 Verification:
 
