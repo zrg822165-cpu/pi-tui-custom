@@ -67,8 +67,16 @@ per-frame process startup or JSON IPC would likely erase the Rust speedup.
 Current safe use:
 
 - Rust library crate for pure diff/patch logic.
+- Rust frame planner and frame input derivation for pure render-path decisions.
 - CLI only for parity checks and future integration experiments.
 - JS remains the default renderer path until a low-overhead bridge is selected.
+
+Current deliberate gap:
+
+- Frame state commits still depend on JS `visibleWidth()` terminal-width
+  semantics. When porting that boundary, pass precomputed line widths into Rust
+  or port the exact width algorithm rather than using byte length or Unicode
+  scalar count.
 
 Recommended bridge options:
 

@@ -1,4 +1,6 @@
 import { spawnSync } from "node:child_process";
+import { FrameInputAdapter } from "../patch-engine/frame-input-adapter.mjs";
+import { FramePlanner } from "../patch-engine/frame-planner.mjs";
 import { LineDiffPatchEngine } from "../patch-engine/line-diff-patch-engine.mjs";
 
 const exe = process.env.PI_PATCH_ENGINE_COMMAND;
@@ -7,6 +9,8 @@ if (!exe) {
 }
 
 const engine = new LineDiffPatchEngine();
+const frameInput = new FrameInputAdapter();
+const planner = new FramePlanner();
 
 function rust(op, input) {
     const result = spawnSync(exe, {
@@ -22,11 +26,21 @@ function rust(op, input) {
 }
 
 function assertEqual(name, actual, expected) {
-    const actualJson = JSON.stringify(actual);
-    const expectedJson = JSON.stringify(expected);
+    const actualJson = JSON.stringify(stable(actual));
+    const expectedJson = JSON.stringify(stable(expected));
     if (actualJson !== expectedJson) {
         throw new Error(`${name} mismatch\nactual:   ${actualJson}\nexpected: ${expectedJson}`);
     }
+}
+
+function stable(value) {
+    if (Array.isArray(value)) {
+        return value.map(stable);
+    }
+    if (value && typeof value === "object") {
+        return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])]));
+    }
+    return value;
 }
 
 const cases = [
@@ -86,10 +100,58 @@ const cases = [
         targetRow: 2,
         targetCol: 8,
     }],
+    ["prepareFrameInput", {
+        terminalWidth: 100,
+        terminalHeight: 20,
+        previousWidth: 100,
+        previousHeight: 30,
+        previousViewportTop: 10,
+        hardwareCursorRow: 25,
+    }, frameInput.prepare.bind(frameInput)],
+    ["computeLineDiff", {
+        targetRow: 12,
+        hardwareCursorRow: 9,
+        prevViewportTop: 5,
+        viewportTop: 8,
+    }, frameInput.computeLineDiff.bind(frameInput)],
+    ["planBeforeDiff", {
+        previousLineCount: 5,
+        widthChanged: true,
+        heightChanged: false,
+        isTermux: false,
+        clearOnShrink: false,
+        newLineCount: 5,
+        maxLinesRendered: 5,
+        hasOverlays: false,
+    }, planner.planBeforeDiff.bind(planner)],
+    ["planBeforeDiff", {
+        previousLineCount: 5,
+        widthChanged: false,
+        heightChanged: false,
+        isTermux: false,
+        clearOnShrink: false,
+        newLineCount: 5,
+        maxLinesRendered: 5,
+        hasOverlays: false,
+    }, planner.planBeforeDiff.bind(planner)],
+    ["planAfterDiff", {
+        firstChanged: -1,
+        newLineCount: 5,
+        previousLineCount: 5,
+        previousViewportTop: 0,
+        height: 20,
+    }, planner.planAfterDiff.bind(planner)],
+    ["planAfterDiff", {
+        firstChanged: 2,
+        newLineCount: 50,
+        previousLineCount: 50,
+        previousViewportTop: 10,
+        height: 20,
+    }, planner.planAfterDiff.bind(planner)],
 ];
 
-for (const [name, input] of cases) {
-    const expected = engine[name](input);
+for (const [name, input, fn] of cases) {
+    const expected = fn ? fn(input) : engine[name](input);
     const actual = rust(name, input);
     assertEqual(name, actual, expected);
 }

@@ -14,6 +14,10 @@ pub enum Operation {
     BuildDeleteLinesPatch(DeleteLinesPatchInput),
     BuildDiffRenderPatch(DiffRenderPatchInput),
     BuildHardwareCursorPatch(HardwareCursorPatchInput),
+    PrepareFrameInput(PrepareFrameInput),
+    ComputeLineDiff(ComputeLineDiffInput),
+    PlanBeforeDiff(PlanBeforeDiffInput),
+    PlanAfterDiff(PlanAfterDiffInput),
 }
 
 #[derive(Debug, Serialize)]
@@ -23,6 +27,9 @@ pub enum OperationResult {
     ViewportChangedRange(ViewportChangedRange),
     Patch(String),
     DiffPatch(DiffPatch),
+    PreparedFrameInput(PreparedFrameInput),
+    LineDiff(isize),
+    FramePlan(FramePlan),
 }
 
 pub fn execute(operation: Operation) -> OperationResult {
@@ -51,6 +58,14 @@ pub fn execute(operation: Operation) -> OperationResult {
         Operation::BuildHardwareCursorPatch(input) => {
             OperationResult::Patch(build_hardware_cursor_patch(&input))
         }
+        Operation::PrepareFrameInput(input) => {
+            OperationResult::PreparedFrameInput(prepare_frame_input(&input))
+        }
+        Operation::ComputeLineDiff(input) => {
+            OperationResult::LineDiff(compute_frame_line_diff(&input))
+        }
+        Operation::PlanBeforeDiff(input) => OperationResult::FramePlan(plan_before_diff(&input)),
+        Operation::PlanAfterDiff(input) => OperationResult::FramePlan(plan_after_diff(&input)),
     }
 }
 
@@ -435,4 +450,205 @@ fn compute_line_diff(
     let current_screen_row = hardware_cursor_row as isize - prev_viewport_top as isize;
     let target_screen_row = target_row as isize - viewport_top as isize;
     target_screen_row - current_screen_row
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrepareFrameInput {
+    pub terminal_width: usize,
+    pub terminal_height: usize,
+    pub previous_width: usize,
+    pub previous_height: usize,
+    pub previous_viewport_top: usize,
+    pub hardware_cursor_row: usize,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreparedFrameInput {
+    pub width: usize,
+    pub height: usize,
+    pub width_changed: bool,
+    pub height_changed: bool,
+    pub previous_buffer_length: usize,
+    pub prev_viewport_top: usize,
+    pub viewport_top: usize,
+    pub hardware_cursor_row: usize,
+}
+
+pub fn prepare_frame_input(input: &PrepareFrameInput) -> PreparedFrameInput {
+    let width_changed = input.previous_width != 0 && input.previous_width != input.terminal_width;
+    let height_changed =
+        input.previous_height != 0 && input.previous_height != input.terminal_height;
+    let previous_buffer_length = if input.previous_height > 0 {
+        input.previous_viewport_top + input.previous_height
+    } else {
+        input.terminal_height
+    };
+    let prev_viewport_top = if height_changed {
+        previous_buffer_length.saturating_sub(input.terminal_height)
+    } else {
+        input.previous_viewport_top
+    };
+    let viewport_top = prev_viewport_top;
+
+    PreparedFrameInput {
+        width: input.terminal_width,
+        height: input.terminal_height,
+        width_changed,
+        height_changed,
+        previous_buffer_length,
+        prev_viewport_top,
+        viewport_top,
+        hardware_cursor_row: input.hardware_cursor_row,
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComputeLineDiffInput {
+    pub target_row: isize,
+    pub hardware_cursor_row: isize,
+    pub prev_viewport_top: isize,
+    pub viewport_top: isize,
+}
+
+pub fn compute_frame_line_diff(input: &ComputeLineDiffInput) -> isize {
+    let current_screen_row = input.hardware_cursor_row - input.prev_viewport_top;
+    let target_screen_row = input.target_row - input.viewport_top;
+    target_screen_row - current_screen_row
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanBeforeDiffInput {
+    pub previous_line_count: usize,
+    pub width_changed: bool,
+    pub height_changed: bool,
+    pub is_termux: bool,
+    pub clear_on_shrink: bool,
+    pub new_line_count: usize,
+    pub max_lines_rendered: usize,
+    pub has_overlays: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanAfterDiffInput {
+    pub first_changed: isize,
+    pub new_line_count: usize,
+    pub previous_line_count: usize,
+    pub previous_viewport_top: usize,
+    pub height: usize,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FramePlan {
+    pub kind: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub clear: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timing_kind: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub new_viewport_top: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub previous_line_count: Option<usize>,
+}
+
+pub fn plan_before_diff(input: &PlanBeforeDiffInput) -> FramePlan {
+    if input.previous_line_count == 0 && !input.width_changed && !input.height_changed {
+        return FramePlan {
+            kind: "fullRender",
+            clear: Some(false),
+            reason: Some("first render"),
+            timing_kind: Some("fullRender"),
+            new_viewport_top: None,
+            previous_line_count: None,
+        };
+    }
+    if input.width_changed {
+        return FramePlan {
+            kind: "fullRender",
+            clear: Some(true),
+            reason: Some("terminal width changed"),
+            timing_kind: Some("fullRenderClear"),
+            new_viewport_top: None,
+            previous_line_count: None,
+        };
+    }
+    if input.height_changed && !input.is_termux {
+        return FramePlan {
+            kind: "fullRender",
+            clear: Some(true),
+            reason: Some("terminal height changed"),
+            timing_kind: Some("fullRenderClear"),
+            new_viewport_top: None,
+            previous_line_count: None,
+        };
+    }
+    if input.clear_on_shrink
+        && input.new_line_count < input.max_lines_rendered
+        && !input.has_overlays
+    {
+        return FramePlan {
+            kind: "fullRender",
+            clear: Some(true),
+            reason: Some("clearOnShrink"),
+            timing_kind: Some("fullRenderClear"),
+            new_viewport_top: None,
+            previous_line_count: None,
+        };
+    }
+    FramePlan {
+        kind: "diff",
+        clear: None,
+        reason: None,
+        timing_kind: None,
+        new_viewport_top: None,
+        previous_line_count: None,
+    }
+}
+
+pub fn plan_after_diff(input: &PlanAfterDiffInput) -> FramePlan {
+    if input.first_changed == -1 {
+        return FramePlan {
+            kind: "noChange",
+            clear: None,
+            reason: None,
+            timing_kind: Some("noChange"),
+            new_viewport_top: None,
+            previous_line_count: None,
+        };
+    }
+    if input.first_changed >= input.new_line_count as isize {
+        return FramePlan {
+            kind: "deleteLines",
+            clear: None,
+            reason: None,
+            timing_kind: Some("deleteLines"),
+            new_viewport_top: None,
+            previous_line_count: None,
+        };
+    }
+    if input.first_changed < input.previous_viewport_top as isize {
+        return FramePlan {
+            kind: "viewportPatch",
+            clear: None,
+            reason: Some("viewport-local"),
+            timing_kind: None,
+            new_viewport_top: Some(input.new_line_count.saturating_sub(input.height)),
+            previous_line_count: None,
+        };
+    }
+    FramePlan {
+        kind: "diffRender",
+        clear: None,
+        reason: None,
+        timing_kind: Some("diffRender"),
+        new_viewport_top: None,
+        previous_line_count: Some(input.previous_line_count),
+    }
 }
