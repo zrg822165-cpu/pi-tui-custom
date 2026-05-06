@@ -1,4 +1,15 @@
 import { ToolExecutionComponent, ToolFlowSummaryComponent, getToolDisplayTarget } from "../tui-renderer/index.mjs";
+import { runRustShadow } from "../../rust-core-shadow/runner.mjs";
+
+function runUiShadow({ name, op, input, jsValue }) {
+    return runRustShadow({
+        name,
+        commandEnv: "PI_UI_CORE_COMMAND",
+        op,
+        input,
+        jsValue,
+    });
+}
 
 export class ToolFlowStore {
     host;
@@ -15,7 +26,14 @@ export class ToolFlowStore {
         return this.host.rendererHost;
     }
     getStartupExpansionState() {
-        return this.host.options.verbose || this.host.toolOutputExpanded;
+        const result = this.host.options.verbose || this.host.toolOutputExpanded;
+        runUiShadow({
+            name: "ui.startupExpansion",
+            op: "startupExpansion",
+            input: { verbose: this.host.options.verbose, toolOutputExpanded: this.host.toolOutputExpanded },
+            jsValue: result,
+        });
+        return result;
     }
     createToolExecutionComponent(toolName, toolCallId, args) {
         const component = new ToolExecutionComponent(toolName, toolCallId, args, {
@@ -38,13 +56,28 @@ export class ToolFlowStore {
         this.toolFlowByToolCallId.set(component.toolCallId, this.activeToolFlow);
     }
     shouldAttachToolExecutionComponent(component, force = false) {
-        if (this.toolFlowByToolCallId.has(component.toolCallId)) {
-            return false;
-        }
-        if (force || component.expanded || component.executionStarted || component.argsComplete || component.result) {
-            return true;
-        }
-        return getToolDisplayTarget(component.toolName, component.args) !== "";
+        const alreadyAttached = this.toolFlowByToolCallId.has(component.toolCallId);
+        const displayTarget = getToolDisplayTarget(component.toolName, component.args);
+        const result = alreadyAttached
+            ? false
+            : force || component.expanded || component.executionStarted || component.argsComplete || !!component.result
+                ? true
+                : displayTarget !== "";
+        runUiShadow({
+            name: "ui.toolShouldAttach",
+            op: "toolShouldAttach",
+            input: {
+                alreadyAttached,
+                force,
+                expanded: component.expanded,
+                executionStarted: component.executionStarted,
+                argsComplete: component.argsComplete,
+                hasResult: !!component.result,
+                displayTarget,
+            },
+            jsValue: result,
+        });
+        return result;
     }
     attachToolExecutionComponentIfReady(component, force = false) {
         if (!this.shouldAttachToolExecutionComponent(component, force)) {
