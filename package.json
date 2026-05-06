@@ -6,6 +6,7 @@
   "scripts": {
     "check": "node scripts/check-all.mjs",
     "smoke": "node scripts/smoke.mjs",
+    "rust:parity": "node scripts/check-rust-parity-all.mjs",
     "test": "npm run check && npm run smoke"
   },
   "keywords": [],
