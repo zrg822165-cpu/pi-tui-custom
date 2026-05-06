@@ -1,0 +1,2 @@
+export const UI_STATE_STORE_PROTOCOL_VERSION = 1;
+

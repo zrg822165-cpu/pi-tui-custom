@@ -1,0 +1,2 @@
+export const NOTICE_STORE_PROTOCOL_VERSION = 1;
+

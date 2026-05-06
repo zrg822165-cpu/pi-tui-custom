@@ -1,0 +1,2 @@
+export const QUEUE_STORE_PROTOCOL_VERSION = 1;
+

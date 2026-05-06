@@ -1,0 +1,2 @@
+export const BASH_STORE_PROTOCOL_VERSION = 1;
+

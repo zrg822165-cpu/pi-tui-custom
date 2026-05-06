@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "compatibilityShell": {
+    "path": "node_modules/@mariozechner/pi-coding-agent/dist/modes/interactive/interactive-mode.js",
+    "role": "Legacy InteractiveMode host shell with fields, accessors, and wrapper registry installation.",
+    "rustRewriteStrategy": "Keep as JS shim until renderer, event runtime, stores, and shell executor are replaced."
+  },
+  "modules": [
+    {
+      "name": "shell-executor",
+      "path": "shell-executor",
+      "entry": "shell-executor/index.mjs",
+      "contract": "shell-executor/interface.mjs",
+      "role": "Command execution and process line streaming.",
+      "rustPriority": 1
+    },
+    {
+      "name": "patch-engine",
+      "path": "patch-engine",
+      "entry": "patch-engine/index.mjs",
+      "contract": "patch-engine/interface.mjs",
+      "role": "Terminal frame diff planning and patch writing.",
+      "rustPriority": 2
+    },
+    {
+      "name": "tui-renderer",
+      "path": "tui-renderer",
+      "entry": "tui-renderer/index.mjs",
+      "contract": "tui-renderer/interface.mjs",
+      "role": "Renderer facade, view state, and TUI event protocol.",
+      "rustPriority": 3
+    },
+    {
+      "name": "event-state-runtime",
+      "path": "event-state-runtime",
+      "entry": "event-state-runtime/index.mjs",
+      "contract": "event-state-runtime/interface.mjs",
+      "role": "Event dispatch, state machine, effect command protocol, and host side-effect boundary.",
+      "rustPriority": 4
+    },
+    {
+      "name": "session-store",
+      "path": "session-store",
+      "entry": "session-store/index.mjs",
+      "contract": "session-store/interface.mjs",
+      "role": "Agent session facade and settings/session bridge.",
+      "rustPriority": 5
+    },
+    {
+      "name": "transcript-store",
+      "path": "transcript-store",
+      "entry": "transcript-store/index.mjs",
+      "contract": "transcript-store/interface.mjs",
+      "role": "Transcript rendering and streaming assistant ownership.",
+      "rustPriority": 5
+    },
+    {
+      "name": "search-indexer",
+      "path": "search-indexer",
+      "entry": "search-indexer/index.mjs",
+      "contract": "search-indexer/interface.mjs",
+      "role": "Search query construction, process execution, result formatting, and context extraction.",
+      "rustPriority": 5
+    },
+    {
+      "name": "queue-store",
+      "path": "queue-store",
+      "entry": "queue-store/index.mjs",
+      "contract": "queue-store/interface.mjs",
+      "role": "Queued user messages and compaction steering queue.",
+      "rustPriority": 6
+    },
+    {
+      "name": "notice-store",
+      "path": "notice-store",
+      "entry": "notice-store/index.mjs",
+      "contract": "notice-store/interface.mjs",
+      "role": "Warnings, package update notices, and version notices.",
+      "rustPriority": 6
+    },
+    {
+      "name": "bash-store",
+      "path": "bash-store",
+      "entry": "bash-store/index.mjs",
+      "contract": "bash-store/interface.mjs",
+      "role": "Bash command UI state and pending bash component ownership.",
+      "rustPriority": 6
+    },
+    {
+      "name": "tool-flow-store",
+      "path": "tool-flow-store",
+      "entry": "tool-flow-store/index.mjs",
+      "contract": "tool-flow-store/interface.mjs",
+      "role": "Tool flow aggregation, pending tool map, and Claude-style compact tool summaries.",
+      "rustPriority": 6
+    },
+    {
+      "name": "ui-state-store",
+      "path": "ui-state-store",
+      "entry": "ui-state-store/index.mjs",
+      "contract": "ui-state-store/interface.mjs",
+      "role": "Working loader, response loader, thinking/status line state.",
+      "rustPriority": 6
+    },
+    {
+      "name": "interactive-mode-support",
+      "path": "interactive-mode-support",
+      "entry": "interactive-mode-support/index.mjs",
+      "contract": "interactive-mode-support/*-contract.mjs",
+      "role": "Compatibility controllers, adapters, wrappers, formatting helpers, and bootstrap/lifecycle glue.",
+      "rustPriority": 7
+    }
+  ],
+  "wrapperRegistry": {
+    "path": "interactive-mode-support/interactive-wrapper-registry.mjs",
+    "role": "Installs legacy InteractiveMode methods onto the prototype while real logic lives in modules.",
+    "installedOn": "InteractiveMode.prototype"
+  },
+  "baseline": {
+    "path": "patches/baseline-claude-flow-v3",
+    "expectedHashResult": "hash_mismatches=0"
+  }
+}
