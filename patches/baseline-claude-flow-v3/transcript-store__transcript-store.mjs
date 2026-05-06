@@ -1,7 +1,7 @@
 import { AssistantMessageComponent, BashExecutionComponent, BranchSummaryMessageComponent, CompactionSummaryMessageComponent, CustomMessageComponent, SkillInvocationMessageComponent, UserMessageComponent } from "../tui-renderer/index.mjs";
 import { Spacer } from "@mariozechner/pi-tui";
 import { parseSkillBlock } from "../node_modules/@mariozechner/pi-coding-agent/dist/core/agent-session.js";
-import { runRustShadow } from "../../rust-core-shadow/runner.mjs";
+import { runRustCoreValue, runRustShadow } from "../../rust-core-shadow/runner.mjs";
 import { Text } from "@mariozechner/pi-tui";
 import { theme } from "../node_modules/@mariozechner/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 
@@ -15,7 +15,16 @@ function runTranscriptShadow({ name, op, input, jsValue }) {
     });
 }
 
+function runTranscriptCore(op, input) {
+    return runRustCoreValue({ commandEnv: "PI_TRANSCRIPT_CORE_COMMAND", op, input });
+}
+
 export function assistantStopToolResult({ stopReason, retryAttempt = 0, errorMessage }) {
+    const input = { stopReason, retryAttempt, errorMessage };
+    const rust = runTranscriptCore("assistantStopToolResult", input);
+    if (rust.ok) {
+        return rust.value;
+    }
     const result = stopReason === "aborted"
         ? retryAttempt > 0
             ? `Aborted after ${retryAttempt} retry attempt${retryAttempt > 1 ? "s" : ""}`
@@ -24,18 +33,23 @@ export function assistantStopToolResult({ stopReason, retryAttempt = 0, errorMes
     runTranscriptShadow({
         name: "transcript.assistantStopToolResult",
         op: "assistantStopToolResult",
-        input: { stopReason, retryAttempt, errorMessage },
+        input,
         jsValue: result,
     });
     return result;
 }
 
 export function compactionStatus({ compactionCount }) {
+    const input = { compactionCount };
+    const rust = runTranscriptCore("compactionStatus", input);
+    if (rust.ok) {
+        return rust.value;
+    }
     const result = compactionCount === 1 ? "Session compacted 1 time" : `Session compacted ${compactionCount} times`;
     runTranscriptShadow({
         name: "transcript.compactionStatus",
         op: "compactionStatus",
-        input: { compactionCount },
+        input,
         jsValue: result,
     });
     return result;
@@ -59,11 +73,16 @@ export class TranscriptStore {
         const enabled = process.env.PI_TUI_VISIBLE_TRANSCRIPT === "1";
         const terminalRows = this.ui?.terminal?.rows ?? 24;
         const multiplier = Number.parseFloat(process.env.PI_TUI_VISIBLE_TRANSCRIPT_MULTIPLIER ?? "4");
+        const input = { enabled, terminalRows, multiplier };
+        const rust = runTranscriptCore("visibleTranscriptLineBudget", input);
+        if (rust.ok) {
+            return rust.value ?? undefined;
+        }
         if (!enabled) {
             runTranscriptShadow({
                 name: "transcript.visibleTranscriptLineBudget",
                 op: "visibleTranscriptLineBudget",
-                input: { enabled, terminalRows, multiplier },
+                input,
                 jsValue: null,
             });
             return undefined;
@@ -74,7 +93,7 @@ export class TranscriptStore {
         runTranscriptShadow({
             name: "transcript.visibleTranscriptLineBudget",
             op: "visibleTranscriptLineBudget",
-            input: { enabled, terminalRows, multiplier },
+            input,
             jsValue: result,
         });
         return result;
@@ -88,6 +107,10 @@ export class TranscriptStore {
         this.adapter.setTranscriptTailLines(lineBudget);
     }
     getUserMessageText(message) {
+        const rust = runTranscriptCore("userMessageText", message);
+        if (rust.ok) {
+            return rust.value;
+        }
         if (message.role !== "user") {
             runTranscriptShadow({
                 name: "transcript.userMessageText",
@@ -112,6 +135,10 @@ export class TranscriptStore {
     messageHasVisibleText(message) {
         const result = message?.content?.some((content) => content.type === "text" && content.text.trim()) ?? false;
         const shadowInput = Array.isArray(message?.content) ? message : { role: message?.role ?? "", content: [] };
+        const rust = runTranscriptCore("messageHasVisibleText", shadowInput);
+        if (rust.ok) {
+            return rust.value;
+        }
         runTranscriptShadow({
             name: "transcript.messageHasVisibleText",
             op: "messageHasVisibleText",
@@ -123,6 +150,10 @@ export class TranscriptStore {
     messageHasToolCall(message) {
         const result = message?.content?.some((content) => content.type === "toolCall") ?? false;
         const shadowInput = Array.isArray(message?.content) ? message : { role: message?.role ?? "", content: [] };
+        const rust = runTranscriptCore("messageHasToolCall", shadowInput);
+        if (rust.ok) {
+            return rust.value;
+        }
         runTranscriptShadow({
             name: "transcript.messageHasToolCall",
             op: "messageHasToolCall",

@@ -1,6 +1,6 @@
 import { AssistantMessageComponent, ThinkingStatusComponent } from "../tui-renderer/index.mjs";
 import { getSession } from "../runtime-host-adapter/index.mjs";
-import { runRustShadow } from "../rust-core-shadow/runner.mjs";
+import { runRustCoreValue, runRustShadow } from "../rust-core-shadow/runner.mjs";
 
 function runUiShadow({ name, op, input, jsValue }) {
     return runRustShadow({
@@ -10,6 +10,10 @@ function runUiShadow({ name, op, input, jsValue }) {
         input,
         jsValue,
     });
+}
+
+function runUiCore(op, input) {
+    return runRustCoreValue({ commandEnv: "PI_UI_CORE_COMMAND", op, input });
 }
 
 export class UIStateStore {
@@ -27,14 +31,19 @@ export class UIStateStore {
         return getSession(this.host);
     }
     getWorkingLoaderMessage() {
+        const input = {
+            workingMessage: this.host.workingMessage,
+            defaultWorkingMessage: this.host.defaultWorkingMessage,
+        };
+        const rust = runUiCore("workingLoaderMessage", input);
+        if (rust.ok) {
+            return rust.value;
+        }
         const result = this.host.workingMessage ?? this.host.defaultWorkingMessage;
         runUiShadow({
             name: "ui.workingLoaderMessage",
             op: "workingLoaderMessage",
-            input: {
-                workingMessage: this.host.workingMessage,
-                defaultWorkingMessage: this.host.defaultWorkingMessage,
-            },
+            input,
             jsValue: result,
         });
         return result;
@@ -49,14 +58,19 @@ export class UIStateStore {
     }
     shouldShowThinkingStatus() {
         const session = this.getSession();
+        const input = {
+            thinkingLevel: session?.thinkingLevel,
+            modelHasReasoning: !!session?.model?.reasoning,
+        };
+        const rust = runUiCore("shouldShowThinkingStatus", input);
+        if (rust.ok) {
+            return rust.value;
+        }
         const result = session?.thinkingLevel !== "off" && !!session?.model?.reasoning;
         runUiShadow({
             name: "ui.shouldShowThinkingStatus",
             op: "shouldShowThinkingStatus",
-            input: {
-                thinkingLevel: session?.thinkingLevel,
-                modelHasReasoning: !!session?.model?.reasoning,
-            },
+            input,
             jsValue: result,
         });
         return result;

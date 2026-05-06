@@ -1,10 +1,5 @@
 import { assistantStopToolResult, compactionStatus, TranscriptStore } from "../transcript-store/transcript-store.mjs";
 
-const command = process.env.PI_TRANSCRIPT_CORE_COMMAND;
-if (!command) {
-    throw new Error("Set PI_TRANSCRIPT_CORE_COMMAND to the Rust transcript core executable.");
-}
-
 process.env.PI_RUST_SHADOW = "1";
 process.env.PI_RUST_SHADOW_STRICT = "1";
 

@@ -1,5 +1,5 @@
 import { ToolExecutionComponent, ToolFlowSummaryComponent, getToolDisplayTarget } from "../tui-renderer/index.mjs";
-import { runRustShadow } from "../rust-core-shadow/runner.mjs";
+import { runRustCoreValue, runRustShadow } from "../rust-core-shadow/runner.mjs";
 
 function runUiShadow({ name, op, input, jsValue }) {
     return runRustShadow({
@@ -9,6 +9,10 @@ function runUiShadow({ name, op, input, jsValue }) {
         input,
         jsValue,
     });
+}
+
+function runUiCore(op, input) {
+    return runRustCoreValue({ commandEnv: "PI_UI_CORE_COMMAND", op, input });
 }
 
 export class ToolFlowStore {
@@ -26,11 +30,16 @@ export class ToolFlowStore {
         return this.host.rendererHost;
     }
     getStartupExpansionState() {
+        const input = { verbose: this.host.options.verbose, toolOutputExpanded: this.host.toolOutputExpanded };
+        const rust = runUiCore("startupExpansion", input);
+        if (rust.ok) {
+            return rust.value;
+        }
         const result = this.host.options.verbose || this.host.toolOutputExpanded;
         runUiShadow({
             name: "ui.startupExpansion",
             op: "startupExpansion",
-            input: { verbose: this.host.options.verbose, toolOutputExpanded: this.host.toolOutputExpanded },
+            input,
             jsValue: result,
         });
         return result;
@@ -58,6 +67,19 @@ export class ToolFlowStore {
     shouldAttachToolExecutionComponent(component, force = false) {
         const alreadyAttached = this.toolFlowByToolCallId.has(component.toolCallId);
         const displayTarget = getToolDisplayTarget(component.toolName, component.args);
+        const input = {
+            alreadyAttached,
+            force,
+            expanded: component.expanded,
+            executionStarted: component.executionStarted,
+            argsComplete: component.argsComplete,
+            hasResult: !!component.result,
+            displayTarget,
+        };
+        const rust = runUiCore("toolShouldAttach", input);
+        if (rust.ok) {
+            return rust.value;
+        }
         const result = alreadyAttached
             ? false
             : force || component.expanded || component.executionStarted || component.argsComplete || !!component.result
@@ -66,15 +88,7 @@ export class ToolFlowStore {
         runUiShadow({
             name: "ui.toolShouldAttach",
             op: "toolShouldAttach",
-            input: {
-                alreadyAttached,
-                force,
-                expanded: component.expanded,
-                executionStarted: component.executionStarted,
-                argsComplete: component.argsComplete,
-                hasResult: !!component.result,
-                displayTarget,
-            },
+            input,
             jsValue: result,
         });
         return result;

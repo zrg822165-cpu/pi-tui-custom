@@ -1,11 +1,6 @@
 import { ToolFlowStore } from "../tool-flow-store/tool-flow-store.mjs";
 import { UIStateStore } from "../ui-state-store/ui-state-store.mjs";
 
-const command = process.env.PI_UI_CORE_COMMAND;
-if (!command) {
-    throw new Error("Set PI_UI_CORE_COMMAND to the Rust UI core executable.");
-}
-
 process.env.PI_RUST_SHADOW = "1";
 process.env.PI_RUST_SHADOW_STRICT = "1";
 
