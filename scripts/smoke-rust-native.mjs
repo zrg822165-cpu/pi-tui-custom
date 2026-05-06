@@ -35,6 +35,17 @@ const batch = runNativeCoreBatch([
             toolOutputExpanded: false,
         },
     },
+    {
+        core: "patch",
+        op: "planAfterDiff",
+        input: {
+            firstChanged: 2,
+            newLineCount: 10,
+            previousLineCount: 9,
+            previousViewportTop: 0,
+            height: 5,
+        },
+    },
 ]);
 
 if (!single.ok) {

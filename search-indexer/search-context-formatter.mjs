@@ -1,5 +1,5 @@
 import { runRustShadow } from "../rust-core-shadow/runner.mjs";
-import { runNativeCoreBatch } from "../rust-core-shadow/native-loader.mjs";
+import { runNativeCoreValue } from "../rust-core-shadow/native-loader.mjs";
 
 export class SearchContextFormatter {
     fsAdapter;
@@ -25,31 +25,34 @@ export class SearchContextFormatter {
         return lines;
     }
     async formatMatches({ searchPath, matches, contextValue, isDirectory }) {
-        const prepared = [];
+        const nativeMatches = [];
+        const fileLinesByPath = {};
+        const fallbacks = [];
         for (const match of matches) {
             const relativePath = this.pathAdapter.formatMatchPath(searchPath, match.filePath, isDirectory);
             if (contextValue === 0 && match.lineText !== undefined) {
-                prepared.push({
-                    op: "formatSingleLineContext",
-                    input: { relativePath, lineNumber: match.lineNumber, lineText: match.lineText },
-                    fallback: () => this.formatSingleLine({ searchPath, filePath: match.filePath, lineNumber: match.lineNumber, lineText: match.lineText, isDirectory }),
-                });
+                nativeMatches.push({ relativePath, filePath: match.filePath, lineNumber: match.lineNumber, lineText: match.lineText });
+                fallbacks.push(() => this.formatSingleLine({ searchPath, filePath: match.filePath, lineNumber: match.lineNumber, lineText: match.lineText, isDirectory }));
             }
             else {
                 const fileLines = await this.getFileLines(match.filePath);
-                prepared.push({
-                    op: "formatBlockContext",
-                    input: { relativePath, lineNumber: match.lineNumber, contextValue, fileLines },
-                    fallback: () => this.formatBlock({ searchPath, filePath: match.filePath, lineNumber: match.lineNumber, contextValue, isDirectory }),
-                });
+                fileLinesByPath[match.filePath] = fileLines;
+                nativeMatches.push({ relativePath, filePath: match.filePath, lineNumber: match.lineNumber, lineText: match.lineText });
+                fallbacks.push(() => this.formatBlock({ searchPath, filePath: match.filePath, lineNumber: match.lineNumber, contextValue, isDirectory }));
             }
         }
-        const batch = runNativeCoreBatch(prepared.map(({ op, input }) => ({ core: "search", op, input })));
-        const values = batch.ok ? batch.values : [];
+        const native = runNativeCoreValue({
+            core: "search",
+            op: "formatContextMatches",
+            input: { matches: nativeMatches, contextValue, fileLinesByPath },
+        });
+        if (native.ok) {
+            return native.value;
+        }
         const outputLines = [];
         let linesTruncated = false;
-        for (let index = 0; index < prepared.length; index++) {
-            const value = batch.ok ? values[index] : await prepared[index].fallback();
+        for (const fallback of fallbacks) {
+            const value = await fallback();
             if (value.lines) {
                 outputLines.push(...value.lines);
             }

@@ -1,10 +1,12 @@
 use pi_search_core::{
-    FdArgsInput, FormatBlockContextInput, FormatFindResultsInput, FormatSingleLineContextInput,
-    FormatTextSearchInput, ParseRipgrepJsonLineInput, RipgrepArgsInput, TruncateHeadInput,
+    ContextMatchInput, FdArgsInput, FormatBlockContextInput, FormatContextMatchesInput,
+    FormatFindResultsInput, FormatSingleLineContextInput, FormatTextSearchInput,
+    ParseRipgrepJsonLineInput, ParseRipgrepJsonLinesInput, RipgrepArgsInput, TruncateHeadInput,
     TruncateLineInput, build_fd_args, build_ripgrep_args, format_block_context,
-    format_find_results, format_single_line_context, format_text_search, parse_ripgrep_json_line,
-    truncate_head, truncate_line,
+    format_context_matches, format_find_results, format_single_line_context, format_text_search,
+    parse_ripgrep_json_line, parse_ripgrep_json_lines, truncate_head, truncate_line,
 };
+use std::collections::HashMap;
 
 #[test]
 fn builds_ripgrep_args_with_literal_glob_and_case() {
@@ -168,4 +170,50 @@ fn parse_ripgrep_json_line_ignores_invalid_and_non_match_events() {
     assert!(invalid.match_result.is_none());
     assert!(!context.is_match_event);
     assert!(context.match_result.is_none());
+}
+
+#[test]
+fn format_context_matches_groups_file_lines_once() {
+    let mut file_lines_by_path = HashMap::new();
+    file_lines_by_path.insert(
+        "src/main.rs".to_owned(),
+        vec!["one".into(), "two".into(), "three".into()],
+    );
+    let result = format_context_matches(&FormatContextMatchesInput {
+        matches: vec![
+            ContextMatchInput {
+                relative_path: "src/main.rs".into(),
+                file_path: "src/main.rs".into(),
+                line_number: 2,
+                line_text: None,
+            },
+            ContextMatchInput {
+                relative_path: "src/main.rs".into(),
+                file_path: "src/main.rs".into(),
+                line_number: 3,
+                line_text: None,
+            },
+        ],
+        context_value: 1,
+        file_lines_by_path,
+        max_chars: Some(100),
+    });
+
+    assert_eq!(result.output_lines.len(), 5);
+    assert!(result.output_lines.contains(&"src/main.rs:2: two".into()));
+    assert!(!result.lines_truncated);
+}
+
+#[test]
+fn parse_ripgrep_json_lines_batches_line_parsing() {
+    let result = parse_ripgrep_json_lines(&ParseRipgrepJsonLinesInput {
+        lines: vec![
+            r#"{"type":"match","data":{"path":{"text":"src/main.rs"},"line_number":7}}"#.into(),
+            "not json".into(),
+        ],
+    });
+
+    assert_eq!(result.len(), 2);
+    assert!(result[0].is_match_event);
+    assert!(!result[1].is_match_event);
 }

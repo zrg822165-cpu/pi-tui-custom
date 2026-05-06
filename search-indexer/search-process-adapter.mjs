@@ -1,5 +1,6 @@
 import { runProcessLines } from "../shell-executor/index.mjs";
 import { runRustShadow } from "../rust-core-shadow/runner.mjs";
+import { runNativeCoreValue } from "../rust-core-shadow/native-loader.mjs";
 
 export function parseRipgrepJsonLine(line) {
     if (!line.trim()) {
@@ -30,6 +31,18 @@ export function parseRipgrepJsonLine(line) {
         jsValue: result,
     });
     return result;
+}
+
+export function parseRipgrepJsonLines(lines) {
+    const native = runNativeCoreValue({
+        core: "search",
+        op: "parseRipgrepJsonLines",
+        input: { lines },
+    });
+    if (native.ok) {
+        return native.value;
+    }
+    return lines.map(parseRipgrepJsonLine);
 }
 
 export class SearchProcessAdapter {

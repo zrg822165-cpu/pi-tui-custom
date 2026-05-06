@@ -18,7 +18,9 @@ pub enum Operation {
     FormatDirectoryResults(FormatDirectoryResultsInput),
     FormatSingleLineContext(FormatSingleLineContextInput),
     FormatBlockContext(FormatBlockContextInput),
+    FormatContextMatches(FormatContextMatchesInput),
     ParseRipgrepJsonLine(ParseRipgrepJsonLineInput),
+    ParseRipgrepJsonLines(ParseRipgrepJsonLinesInput),
 }
 
 #[derive(Debug, Serialize)]
@@ -31,7 +33,9 @@ pub enum OperationResult {
     FormattedOutput(FormattedOutput),
     ContextLine(ContextLine),
     ContextBlock(ContextBlock),
+    ContextMatches(ContextMatches),
     RipgrepJsonLine(RipgrepJsonLine),
+    RipgrepJsonLines(Vec<RipgrepJsonLine>),
 }
 
 pub fn execute(operation: Operation) -> OperationResult {
@@ -56,8 +60,14 @@ pub fn execute(operation: Operation) -> OperationResult {
         Operation::FormatBlockContext(input) => {
             OperationResult::ContextBlock(format_block_context(&input))
         }
+        Operation::FormatContextMatches(input) => {
+            OperationResult::ContextMatches(format_context_matches(&input))
+        }
         Operation::ParseRipgrepJsonLine(input) => {
             OperationResult::RipgrepJsonLine(parse_ripgrep_json_line(&input))
+        }
+        Operation::ParseRipgrepJsonLines(input) => {
+            OperationResult::RipgrepJsonLines(parse_ripgrep_json_lines(&input))
         }
     }
 }
@@ -581,8 +591,78 @@ pub fn format_block_context(input: &FormatBlockContextInput) -> ContextBlock {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct FormatContextMatchesInput {
+    pub matches: Vec<ContextMatchInput>,
+    pub context_value: usize,
+    pub file_lines_by_path: std::collections::HashMap<String, Vec<String>>,
+    #[serde(default)]
+    pub max_chars: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextMatchInput {
+    pub relative_path: String,
+    pub file_path: String,
+    pub line_number: usize,
+    #[serde(default)]
+    pub line_text: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextMatches {
+    pub output_lines: Vec<String>,
+    pub lines_truncated: bool,
+}
+
+pub fn format_context_matches(input: &FormatContextMatchesInput) -> ContextMatches {
+    let mut output_lines = Vec::new();
+    let mut lines_truncated = false;
+    for matched in &input.matches {
+        if input.context_value == 0
+            && let Some(line_text) = matched.line_text.as_deref()
+        {
+            let line = format_single_line_context(&FormatSingleLineContextInput {
+                relative_path: matched.relative_path.clone(),
+                line_number: matched.line_number,
+                line_text: line_text.to_owned(),
+                max_chars: input.max_chars,
+            });
+            output_lines.push(line.line);
+            lines_truncated |= line.lines_truncated;
+            continue;
+        }
+        let block = format_block_context(&FormatBlockContextInput {
+            relative_path: matched.relative_path.clone(),
+            line_number: matched.line_number,
+            context_value: input.context_value,
+            file_lines: input
+                .file_lines_by_path
+                .get(&matched.file_path)
+                .cloned()
+                .unwrap_or_default(),
+            max_chars: input.max_chars,
+        });
+        output_lines.extend(block.lines);
+        lines_truncated |= block.lines_truncated;
+    }
+    ContextMatches {
+        output_lines,
+        lines_truncated,
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ParseRipgrepJsonLineInput {
     pub line: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ParseRipgrepJsonLinesInput {
+    pub lines: Vec<String>,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -640,6 +720,14 @@ pub fn parse_ripgrep_json_line(input: &ParseRipgrepJsonLineInput) -> RipgrepJson
                 line_text,
             }),
     }
+}
+
+pub fn parse_ripgrep_json_lines(input: &ParseRipgrepJsonLinesInput) -> Vec<RipgrepJsonLine> {
+    input
+        .lines
+        .iter()
+        .map(|line| parse_ripgrep_json_line(&ParseRipgrepJsonLineInput { line: line.clone() }))
+        .collect()
 }
 
 fn no_ripgrep_match_event() -> RipgrepJsonLine {

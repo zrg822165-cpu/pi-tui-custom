@@ -1,5 +1,11 @@
+import { runPatchCoreValue } from "./rust-patch-core.mjs";
+
 export class FramePlanner {
     planBeforeDiff(input) {
+        const rust = runPatchCoreValue("planBeforeDiff", input);
+        if (rust.ok) {
+            return rust.value;
+        }
         const {
             previousLineCount,
             widthChanged,
@@ -26,6 +32,10 @@ export class FramePlanner {
     }
 
     planAfterDiff(input) {
+        const rust = runPatchCoreValue("planAfterDiff", input);
+        if (rust.ok) {
+            return rust.value;
+        }
         const {
             firstChanged,
             newLineCount,

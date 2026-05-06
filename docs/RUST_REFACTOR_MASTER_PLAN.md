@@ -94,6 +94,18 @@
 8. 根据 benchmark 决定是否继续 Rust 化 renderer internals；默认不碰 JS 扩展 renderer。
 9. 清理临时 CLI 主路径，只保留 parity/fallback/debug 用途。
 
+## Progress
+
+- [x] 计划文档已创建。
+- [x] `pi-core-native` N-API bridge 已创建，支持 `version()`、`execute()`、`executeBatch()`。
+- [x] JS runtime bridge 已改为 native-first、CLI fallback，并支持 `PI_RUST_CORE`、`PI_RUST_BRIDGE`、shadow env。
+- [x] Search context/query/formatting 已接入 native/batch，JS 保留进程、FS、path adapter 和 tool integration。
+- [x] Transcript、queue、event、UI policy 已接入 native-first，JS 保留 renderer、session、event bus 和 side effects。
+- [x] Patch engine frame input、frame planner、line diff、ANSI patch buffer 生成已接入 native-first；宽度检测、terminal writer、renderer state commit 继续留在 JS。
+- [ ] Replay/benchmark 尚未系统化落地。
+- [ ] 根据 benchmark 决定是否将 frame render pipeline 做批量 native plan，默认不碰 JS custom renderer。
+- [ ] CLI 主路径清理尚未开始，当前仍保留为 fallback/parity/debug。
+
 ## Test Plan
 
 - 每步必须通过：

@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { SearchQueryBuilder } from "../search-indexer/search-query-builder.mjs";
 import { SearchContextFormatter } from "../search-indexer/search-context-formatter.mjs";
-import { parseRipgrepJsonLine } from "../search-indexer/search-process-adapter.mjs";
+import { parseRipgrepJsonLine, parseRipgrepJsonLines } from "../search-indexer/search-process-adapter.mjs";
 import { SearchResultFormatter } from "../search-indexer/search-result-formatter.mjs";
 import { formatSize, truncateHead, truncateLine } from "../node_modules/@mariozechner/pi-coding-agent/dist/core/tools/truncate.js";
 
@@ -62,6 +62,22 @@ function assertEqual(name, actual, expected) {
     const expectedJson = JSON.stringify(stable(expected));
     if (actualJson !== expectedJson) {
         throw new Error(`${name} mismatch\nactual:   ${actualJson}\nexpected: ${expectedJson}`);
+    }
+}
+
+async function computeJsExpected(fn) {
+    const previous = process.env.PI_RUST_CORE;
+    process.env.PI_RUST_CORE = "0";
+    try {
+        return await fn();
+    }
+    finally {
+        if (previous === undefined) {
+            delete process.env.PI_RUST_CORE;
+        }
+        else {
+            process.env.PI_RUST_CORE = previous;
+        }
     }
 }
 
@@ -204,6 +220,24 @@ const cases = [
         contextValue,
         isDirectory: true,
     })],
+    ["formatContextMatches", {
+        matches: [
+            { relativePath: "src/main.rs", filePath: "src/main.rs", lineNumber: 2, lineText: "two\r\n" },
+            { relativePath: "src/main.rs", filePath: "src/main.rs", lineNumber: 3 },
+        ],
+        contextValue: 1,
+        fileLinesByPath: {
+            "src/main.rs": ["one", "two", "three"],
+        },
+    }, async () => contextFormatter.formatMatches({
+        searchPath: ".",
+        matches: [
+            { filePath: "src/main.rs", lineNumber: 2, lineText: "two\r\n" },
+            { filePath: "src/main.rs", lineNumber: 3 },
+        ],
+        contextValue: 1,
+        isDirectory: true,
+    })],
     ["parseRipgrepJsonLine", {
         line: JSON.stringify({
             type: "match",
@@ -235,10 +269,23 @@ const cases = [
     ["parseRipgrepJsonLine", {
         line: "not json",
     }, ({ line }) => parseRipgrepJsonLine(line)],
+    ["parseRipgrepJsonLines", {
+        lines: [
+            JSON.stringify({
+                type: "match",
+                data: {
+                    path: { text: "src/main.rs" },
+                    line_number: 2,
+                    lines: { text: "two\n" },
+                },
+            }),
+            "not json",
+        ],
+    }, ({ lines }) => parseRipgrepJsonLines(lines)],
 ];
 
 for (const [name, input, expectedFn] of cases) {
-    assertEqual(name, rust(name, input), await expectedFn(input));
+    assertEqual(name, rust(name, input), await computeJsExpected(() => expectedFn(input)));
 }
 
 console.log(JSON.stringify({ ok: true, checked: cases.length }, null, 2));

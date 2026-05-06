@@ -6,6 +6,7 @@
   "scripts": {
     "check": "node scripts/check-all.mjs",
     "rust:native": "node scripts/build-rust-native.mjs",
+    "rust:bench": "node scripts/bench-rust-core.mjs",
     "smoke": "node scripts/smoke.mjs",
     "rust:parity": "node scripts/check-rust-parity-all.mjs",
     "test": "npm run check && npm run smoke"

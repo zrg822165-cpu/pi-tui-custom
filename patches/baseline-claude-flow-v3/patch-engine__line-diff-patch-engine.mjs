@@ -1,5 +1,11 @@
+import { runPatchCoreValue } from "./rust-patch-core.mjs";
+
 export class LineDiffPatchEngine {
     findChangedRange(input) {
+        const rust = runPatchCoreValue("findChangedRange", input);
+        if (rust.ok) {
+            return rust.value;
+        }
         const {
             previousLines,
             newLines,
@@ -78,6 +84,10 @@ export class LineDiffPatchEngine {
     }
 
     findViewportChangedRange(input) {
+        const rust = runPatchCoreValue("findViewportChangedRange", input);
+        if (rust.ok) {
+            return rust.value;
+        }
         const {
             previousLines,
             newLines,
@@ -107,6 +117,10 @@ export class LineDiffPatchEngine {
     }
 
     buildMarkedLinePatch(input) {
+        const rust = runPatchCoreValue("buildMarkedLinePatch", input);
+        if (rust.ok) {
+            return rust.value;
+        }
         const {
             targetRow,
             originalRow,
@@ -134,6 +148,10 @@ export class LineDiffPatchEngine {
     }
 
     buildFullRenderPatch(input) {
+        const rust = runPatchCoreValue("buildFullRenderPatch", input);
+        if (rust.ok) {
+            return rust.value;
+        }
         const { clear, newLines } = input;
         let buffer = "\x1b[?2026h";
         if (clear) {
@@ -150,6 +168,10 @@ export class LineDiffPatchEngine {
     }
 
     buildViewportPatch(input) {
+        const rust = runPatchCoreValue("buildViewportPatch", input);
+        if (rust.ok) {
+            return rust.value;
+        }
         const {
             firstScreenChanged,
             lastScreenChanged,
@@ -177,6 +199,10 @@ export class LineDiffPatchEngine {
     }
 
     buildDeleteLinesPatch(input) {
+        const rust = runPatchCoreValue("buildDeleteLinesPatch", input);
+        if (rust.ok) {
+            return rust.value;
+        }
         const { lineDiff, extraLines } = input;
         let buffer = "\x1b[?2026h";
         if (lineDiff > 0) {
@@ -203,6 +229,10 @@ export class LineDiffPatchEngine {
     }
 
     buildDiffRenderPatch(input) {
+        const rust = runPatchCoreValue("buildDiffRenderPatch", input);
+        if (rust.ok) {
+            return rust.value;
+        }
         const {
             firstChanged,
             renderEnd,
@@ -277,6 +307,10 @@ export class LineDiffPatchEngine {
     }
 
     buildHardwareCursorPatch(input) {
+        const rust = runPatchCoreValue("buildHardwareCursorPatch", input);
+        if (rust.ok) {
+            return rust.value;
+        }
         const { currentRow, targetRow, targetCol } = input;
         const rowDelta = targetRow - currentRow;
         let buffer = "";

@@ -1,5 +1,11 @@
+import { runPatchCoreValue } from "./rust-patch-core.mjs";
+
 export class FrameInputAdapter {
     prepare(input) {
+        const rust = runPatchCoreValue("prepareFrameInput", input);
+        if (rust.ok) {
+            return rust.value;
+        }
         const {
             terminalWidth,
             terminalHeight,
@@ -26,6 +32,10 @@ export class FrameInputAdapter {
     }
 
     computeLineDiff(input) {
+        const rust = runPatchCoreValue("computeLineDiff", input);
+        if (rust.ok) {
+            return rust.value;
+        }
         const {
             targetRow,
             hardwareCursorRow,

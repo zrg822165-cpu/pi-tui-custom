@@ -33,6 +33,22 @@ function assertEqual(name, actual, expected) {
     }
 }
 
+function computeJsExpected(fn) {
+    const previous = process.env.PI_RUST_CORE;
+    process.env.PI_RUST_CORE = "0";
+    try {
+        return fn();
+    }
+    finally {
+        if (previous === undefined) {
+            delete process.env.PI_RUST_CORE;
+        }
+        else {
+            process.env.PI_RUST_CORE = previous;
+        }
+    }
+}
+
 function stable(value) {
     if (Array.isArray(value)) {
         return value.map(stable);
@@ -151,7 +167,7 @@ const cases = [
 ];
 
 for (const [name, input, fn] of cases) {
-    const expected = fn ? fn(input) : engine[name](input);
+    const expected = computeJsExpected(() => fn ? fn(input) : engine[name](input));
     const actual = rust(name, input);
     assertEqual(name, actual, expected);
 }
