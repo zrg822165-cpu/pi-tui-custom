@@ -201,6 +201,27 @@ $env:PI_TRANSCRIPT_CORE_COMMAND = "<path-to-pi-transcript-core-exe>"
 node scripts/check-rust-transcript-core-parity.mjs
 ```
 
+## UI Core Rust Migration
+
+`pi-ui-core` ports small UI policy decisions while leaving all TUI components
+and extension rendering in JavaScript:
+
+- tool execution component attach decisions;
+- startup tool-output expansion state;
+- thinking-status visibility decisions;
+- working-loader message selection;
+- simple notice text policies.
+
+JS still owns component instances, renderer host mutation, theme coloring,
+settings managers, and custom tool/message renderers.
+
+Verification:
+
+```powershell
+$env:PI_UI_CORE_COMMAND = "<path-to-pi-ui-core-exe>"
+node scripts/check-rust-ui-core-parity.mjs
+```
+
 ## Notes From Current Rust Research
 
 - Rust 1.95.0 is the current local stable and should be used as the migration
