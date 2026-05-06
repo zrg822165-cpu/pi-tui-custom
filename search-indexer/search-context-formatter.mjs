@@ -1,4 +1,5 @@
 import { runRustShadow } from "../rust-core-shadow/runner.mjs";
+import { runNativeCoreBatch } from "../rust-core-shadow/native-loader.mjs";
 
 export class SearchContextFormatter {
     fsAdapter;
@@ -22,6 +23,44 @@ export class SearchContextFormatter {
             this.fileCache.set(filePath, lines);
         }
         return lines;
+    }
+    async formatMatches({ searchPath, matches, contextValue, isDirectory }) {
+        const prepared = [];
+        for (const match of matches) {
+            const relativePath = this.pathAdapter.formatMatchPath(searchPath, match.filePath, isDirectory);
+            if (contextValue === 0 && match.lineText !== undefined) {
+                prepared.push({
+                    op: "formatSingleLineContext",
+                    input: { relativePath, lineNumber: match.lineNumber, lineText: match.lineText },
+                    fallback: () => this.formatSingleLine({ searchPath, filePath: match.filePath, lineNumber: match.lineNumber, lineText: match.lineText, isDirectory }),
+                });
+            }
+            else {
+                const fileLines = await this.getFileLines(match.filePath);
+                prepared.push({
+                    op: "formatBlockContext",
+                    input: { relativePath, lineNumber: match.lineNumber, contextValue, fileLines },
+                    fallback: () => this.formatBlock({ searchPath, filePath: match.filePath, lineNumber: match.lineNumber, contextValue, isDirectory }),
+                });
+            }
+        }
+        const batch = runNativeCoreBatch(prepared.map(({ op, input }) => ({ core: "search", op, input })));
+        const values = batch.ok ? batch.values : [];
+        const outputLines = [];
+        let linesTruncated = false;
+        for (let index = 0; index < prepared.length; index++) {
+            const value = batch.ok ? values[index] : await prepared[index].fallback();
+            if (value.lines) {
+                outputLines.push(...value.lines);
+            }
+            else {
+                outputLines.push(value.line);
+            }
+            if (value.linesTruncated) {
+                linesTruncated = true;
+            }
+        }
+        return { outputLines, linesTruncated };
     }
     async formatBlock({ searchPath, filePath, lineNumber, contextValue, isDirectory }) {
         const relativePath = this.pathAdapter.formatMatchPath(searchPath, filePath, isDirectory);

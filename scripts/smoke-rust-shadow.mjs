@@ -64,6 +64,15 @@ const block = await contextFormatter.formatBlock({
     contextValue: 1,
     isDirectory: true,
 });
+const formattedMatches = await contextFormatter.formatMatches({
+    searchPath: ".",
+    matches: [
+        { filePath: "src/main.rs", lineNumber: 2, lineText: "two\r\n" },
+        { filePath: "src/main.rs", lineNumber: 3 },
+    ],
+    contextValue: 1,
+    isDirectory: true,
+});
 const parsedLine = parseRipgrepJsonLine(JSON.stringify({
     type: "match",
     data: {
@@ -82,5 +91,6 @@ console.log(JSON.stringify({
     directoryResults,
     singleLine,
     block,
+    formattedMatches,
     parsedLine,
 }, null, 2));

@@ -51,8 +51,6 @@ export class RipgrepSearchIndexer {
         const contextValue = context && context > 0 ? context : 0;
         const effectiveLimit = Math.max(1, limit);
         const args = this.queryBuilder.buildRipgrepArgs({ pattern, searchPath, glob, ignoreCase, literal });
-        let linesTruncated = false;
-        const outputLines = [];
         const { processResult, matches, matchCount, matchLimitReached, killedDueToLimit } = await this.processAdapter.runRipgrepJson(args, { limit: effectiveLimit, signal });
         if (signal?.aborted) {
             throw new Error("Operation aborted");
@@ -64,32 +62,7 @@ export class RipgrepSearchIndexer {
         if (matchCount === 0) {
             return { content: "No matches found", details: undefined };
         }
-        for (const match of matches) {
-            if (contextValue === 0 && match.lineText !== undefined) {
-                const { line, linesTruncated: wasTruncated } = this.contextFormatter.formatSingleLine({
-                    searchPath,
-                    filePath: match.filePath,
-                    lineNumber: match.lineNumber,
-                    lineText: match.lineText,
-                    isDirectory,
-                });
-                if (wasTruncated)
-                    linesTruncated = true;
-                outputLines.push(line);
-            }
-            else {
-                const block = await this.contextFormatter.formatBlock({
-                    searchPath,
-                    filePath: match.filePath,
-                    lineNumber: match.lineNumber,
-                    contextValue,
-                    isDirectory,
-                });
-                if (block.linesTruncated)
-                    linesTruncated = true;
-                outputLines.push(...block.lines);
-            }
-        }
+        const { outputLines, linesTruncated } = await this.contextFormatter.formatMatches({ searchPath, matches, contextValue, isDirectory });
         return this.resultFormatter.formatTextSearch(outputLines, { effectiveLimit, matchLimitReached, linesTruncated });
     }
     async findFiles({ pattern, path: searchDir, limit = 1000 }, signal) {
