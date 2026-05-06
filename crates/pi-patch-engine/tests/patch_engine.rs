@@ -1,8 +1,8 @@
 use pi_patch_engine::{
     ChangedRangeInput, DeleteLinesPatchInput, FullRenderPatchInput, HardwareCursorPatchInput,
-    PlanAfterDiffInput, PlanBeforeDiffInput, PrepareFrameInput, build_delete_lines_patch,
-    build_full_render_patch, build_hardware_cursor_patch, find_changed_range, plan_after_diff,
-    plan_before_diff, prepare_frame_input,
+    PlanAfterDiffInput, PlanBeforeDiffInput, PlanFramePatchInput, PrepareFrameInput,
+    build_delete_lines_patch, build_full_render_patch, build_hardware_cursor_patch,
+    find_changed_range, plan_after_diff, plan_before_diff, plan_frame_patch, prepare_frame_input,
 };
 
 #[test]
@@ -103,4 +103,27 @@ fn planner_selects_viewport_patch_for_change_above_viewport() {
     assert_eq!(plan.kind, "viewportPatch");
     assert_eq!(plan.new_viewport_top, Some(30));
     assert_eq!(plan.reason, Some("viewport-local"));
+}
+
+#[test]
+fn frame_patch_plan_groups_frame_diff_and_after_plan() {
+    let plan = plan_frame_patch(&PlanFramePatchInput {
+        terminal_width: 100,
+        terminal_height: 20,
+        previous_width: 100,
+        previous_height: 20,
+        previous_viewport_top: 0,
+        hardware_cursor_row: 4,
+        previous_lines: vec!["a".into(), "b".into(), "c".into()],
+        new_lines: vec!["a".into(), "b2".into(), "c".into()],
+        is_termux: false,
+        clear_on_shrink: false,
+        max_lines_rendered: 3,
+        has_overlays: false,
+    });
+
+    assert_eq!(plan.before_diff_plan.kind, "diff");
+    assert_eq!(plan.changed_range.expect("changed range").first_changed, 1);
+    assert_eq!(plan.after_diff_plan.expect("after plan").kind, "diffRender");
+    assert!(plan.delete_lines_plan.is_none());
 }

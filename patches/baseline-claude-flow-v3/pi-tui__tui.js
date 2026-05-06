@@ -1127,27 +1127,11 @@ export class TUI extends Container {
                 } : {}),
             });
         };
-        const frameInput = this.frameRuntime.prepareFrameInput({
-            terminalWidth: this.terminal.columns,
-            terminalHeight: this.terminal.rows,
-            previousWidth: this.previousWidth,
-            previousHeight: this.previousHeight,
-            previousViewportTop: this.previousViewportTop,
-            hardwareCursorRow: this.hardwareCursorRow,
-        });
-        const width = frameInput.width;
-        const height = frameInput.height;
-        const widthChanged = frameInput.widthChanged;
-        const heightChanged = frameInput.heightChanged;
-        let prevViewportTop = frameInput.prevViewportTop;
-        let viewportTop = frameInput.viewportTop;
-        let hardwareCursorRow = frameInput.hardwareCursorRow;
-        const computeLineDiff = (targetRow) => this.frameRuntime.computeLineDiff({
-            targetRow,
-            hardwareCursorRow,
-            prevViewportTop,
-            viewportTop,
-        });
+        const width = this.terminal.columns;
+        const height = this.terminal.rows;
+        let prevViewportTop = this.previousViewportTop;
+        let viewportTop = this.previousViewportTop;
+        let hardwareCursorRow = this.hardwareCursorRow;
         // Render all components to get new lines
         const renderStart = performance.now();
         let newLines = this.render(width);
@@ -1215,16 +1199,26 @@ export class TUI extends Container {
             finishFrameTiming(result.timingKind);
             return true;
         };
-        const beforeDiffPlan = this.frameRuntime.planBeforeDiff({
-            previousLineCount: this.previousLines.length,
-            widthChanged,
-            heightChanged,
+        const diffStart = performance.now();
+        const framePlan = this.frameRuntime.planFramePatch({
+            terminalWidth: this.terminal.columns,
+            terminalHeight: this.terminal.rows,
+            previousWidth: this.previousWidth,
+            previousHeight: this.previousHeight,
+            previousViewportTop: this.previousViewportTop,
+            hardwareCursorRow: this.hardwareCursorRow,
+            previousLines: this.previousLines,
+            newLines,
             isTermux: isTermuxSession(),
             clearOnShrink: this.clearOnShrink,
-            newLineCount: newLines.length,
             maxLinesRendered: this.maxLinesRendered,
             hasOverlays: this.overlayStack.length !== 0,
         });
+        const frameInput = framePlan.frameInput;
+        prevViewportTop = frameInput.prevViewportTop;
+        viewportTop = frameInput.viewportTop;
+        hardwareCursorRow = frameInput.hardwareCursorRow;
+        const beforeDiffPlan = framePlan.beforeDiffPlan;
         if (beforeDiffPlan.kind === "fullRender") {
             if (beforeDiffPlan.reason) {
                 logRedraw(this.frameRuntime.formatFullRenderReason(beforeDiffPlan, {
@@ -1238,16 +1232,7 @@ export class TUI extends Container {
             fullRender(beforeDiffPlan.clear);
             return;
         }
-        // Find first and last changed lines. Most interactive frames only touch the tail:
-        // streaming assistant text, tool summaries, footer/editor, or appended transcript lines.
-        // Prefer a bounded tail window, then fall back to the historical full scan when needed.
-        const diffStart = performance.now();
-        const changedRange = this.patchEngine.findChangedRange({
-            previousLines: this.previousLines,
-            newLines,
-            height,
-            previousViewportTop: prevViewportTop,
-        });
+        const changedRange = framePlan.changedRange;
         let firstChanged = changedRange.firstChanged;
         let lastChanged = changedRange.lastChanged;
         const appendedLines = changedRange.appendedLines;
@@ -1256,13 +1241,7 @@ export class TUI extends Container {
         diffWindowStart = changedRange.diffWindowStart;
         diffMs += performance.now() - diffStart;
         const appendStart = changedRange.appendStart;
-        const afterDiffPlan = this.frameRuntime.planAfterDiff({
-            firstChanged,
-            newLineCount: newLines.length,
-            previousLineCount: this.previousLines.length,
-            previousViewportTop: prevViewportTop,
-            height,
-        });
+        const afterDiffPlan = framePlan.afterDiffPlan;
         // No changes - but still need to update hardware cursor position if it moved
         if (afterDiffPlan.kind === "noChange") {
             const result = this.frameRuntime.executeNoChange({
@@ -1279,17 +1258,17 @@ export class TUI extends Container {
         // All changes are in deleted lines (nothing to render, just clear)
         if (afterDiffPlan.kind === "deleteLines") {
             if (this.previousLines.length > newLines.length) {
-                // Move to end of new content (clamp to 0 for empty content)
-                const targetRow = Math.max(0, newLines.length - 1);
-                const lineDiff = computeLineDiff(targetRow);
-                // Clear extra lines without scrolling
-                const extraLines = this.previousLines.length - newLines.length;
+                const deleteLinesPlan = framePlan.deleteLinesPlan ?? {
+                    targetRow: Math.max(0, newLines.length - 1),
+                    lineDiff: 0,
+                    extraLines: this.previousLines.length - newLines.length,
+                };
                 const result = this.frameRuntime.executeDeleteLines({
                     terminal: this.terminal,
                     target: this,
-                    targetRow,
-                    lineDiff,
-                    extraLines,
+                    targetRow: deleteLinesPlan.targetRow,
+                    lineDiff: deleteLinesPlan.lineDiff,
+                    extraLines: deleteLinesPlan.extraLines,
                     height,
                     width,
                     newLines,

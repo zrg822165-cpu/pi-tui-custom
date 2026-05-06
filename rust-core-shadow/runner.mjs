@@ -94,7 +94,7 @@ export function runRustCoreValue({ commandEnv, op, input, timeoutMs }) {
     if (process.env.PI_RUST_CORE === "0") {
         return { ok: false, skipped: "disabled" };
     }
-    if (process.env.PI_RUST_BRIDGE !== "cli") {
+    if (process.env.PI_RUST_BRIDGE !== "cli" && process.env.PI_RUST_BRIDGE !== "js") {
         const core = COMMAND_ENV_TO_CORE[commandEnv];
         if (core) {
             const native = runNativeCoreValue({ core, op, input });
@@ -103,7 +103,7 @@ export function runRustCoreValue({ commandEnv, op, input, timeoutMs }) {
             }
         }
     }
-    if (process.env.PI_RUST_BRIDGE === "native") {
+    if (process.env.PI_RUST_BRIDGE === "native" || process.env.PI_RUST_BRIDGE !== "cli") {
         return { ok: false, skipped: "native_unavailable" };
     }
     const command = resolveCommand(commandEnv);

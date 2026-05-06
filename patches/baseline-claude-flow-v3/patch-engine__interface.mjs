@@ -43,6 +43,7 @@ export const PATCH_ENGINE_SURFACE = Object.freeze({
         "computeLineDiff",
         "planBeforeDiff",
         "planAfterDiff",
+        "planFramePatch",
         "write",
         "applyState",
         "formatFullRenderReason",

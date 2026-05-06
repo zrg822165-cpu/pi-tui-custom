@@ -164,6 +164,46 @@ const cases = [
         previousViewportTop: 10,
         height: 20,
     }, planner.planAfterDiff.bind(planner)],
+    ["planFramePatch", {
+        terminalWidth: 100,
+        terminalHeight: 20,
+        previousWidth: 100,
+        previousHeight: 20,
+        previousViewportTop: 0,
+        hardwareCursorRow: 4,
+        previousLines: ["a", "b", "c"],
+        newLines: ["a", "b2", "c"],
+        isTermux: false,
+        clearOnShrink: false,
+        maxLinesRendered: 3,
+        hasOverlays: false,
+    }, (input) => {
+        const preparedFrameInput = frameInput.prepare(input);
+        const beforeDiffPlan = planner.planBeforeDiff({
+            previousLineCount: input.previousLines.length,
+            widthChanged: preparedFrameInput.widthChanged,
+            heightChanged: preparedFrameInput.heightChanged,
+            isTermux: input.isTermux,
+            clearOnShrink: input.clearOnShrink,
+            newLineCount: input.newLines.length,
+            maxLinesRendered: input.maxLinesRendered,
+            hasOverlays: input.hasOverlays,
+        });
+        const changedRange = engine.findChangedRange({
+            previousLines: input.previousLines,
+            newLines: input.newLines,
+            height: preparedFrameInput.height,
+            previousViewportTop: preparedFrameInput.prevViewportTop,
+        });
+        const afterDiffPlan = planner.planAfterDiff({
+            firstChanged: changedRange.firstChanged,
+            newLineCount: input.newLines.length,
+            previousLineCount: input.previousLines.length,
+            previousViewportTop: preparedFrameInput.prevViewportTop,
+            height: preparedFrameInput.height,
+        });
+        return { frameInput: preparedFrameInput, beforeDiffPlan, changedRange, afterDiffPlan };
+    }],
 ];
 
 for (const [name, input, fn] of cases) {

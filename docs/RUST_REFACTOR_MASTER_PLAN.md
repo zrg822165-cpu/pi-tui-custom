@@ -102,9 +102,9 @@
 - [x] Search context/query/formatting 已接入 native/batch，JS 保留进程、FS、path adapter 和 tool integration。
 - [x] Transcript、queue、event、UI policy 已接入 native-first，JS 保留 renderer、session、event bus 和 side effects。
 - [x] Patch engine frame input、frame planner、line diff、ANSI patch buffer 生成已接入 native-first；宽度检测、terminal writer、renderer state commit 继续留在 JS。
-- [ ] Replay/benchmark 尚未系统化落地。
-- [ ] 根据 benchmark 决定是否将 frame render pipeline 做批量 native plan，默认不碰 JS custom renderer。
-- [ ] CLI 主路径清理尚未开始，当前仍保留为 fallback/parity/debug。
+- [x] Replay/benchmark 已建立第一版 `npm run rust:bench`，覆盖 rg JSON parse、context formatting、long transcript、queue flush、frame diff/pipeline plan。
+- [x] 已根据 benchmark 将 frame render pipeline 的 pure planning 合并为单次 native `planFramePatch`；JS custom renderer、terminal writer、state side effects 不进入 Rust。
+- [x] CLI 主路径已从默认 runtime fallback 移除；默认为 native -> JS fallback，CLI 仅在 `PI_RUST_BRIDGE=cli` 或 parity/debug 脚本中使用。
 
 ## Test Plan
 

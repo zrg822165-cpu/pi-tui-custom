@@ -324,6 +324,14 @@ export class LineDiffPatchEngine {
         return buffer;
     }
 
+    planFramePatch(input) {
+        const rust = runPatchCoreValue("planFramePatch", input);
+        if (rust.ok) {
+            return rust.value;
+        }
+        return undefined;
+    }
+
     findFirstWideLine(input) {
         const {
             lines,

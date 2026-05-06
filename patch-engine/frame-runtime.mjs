@@ -23,6 +23,55 @@ export class FrameRuntime {
         return this.framePlanner.planAfterDiff(input);
     }
 
+    planFramePatch(input) {
+        const rust = this.patchEngine.planFramePatch?.(input);
+        if (rust) {
+            return rust;
+        }
+        const frameInput = this.prepareFrameInput(input);
+        const beforeDiffPlan = this.planBeforeDiff({
+            previousLineCount: input.previousLines.length,
+            widthChanged: frameInput.widthChanged,
+            heightChanged: frameInput.heightChanged,
+            isTermux: input.isTermux,
+            clearOnShrink: input.clearOnShrink,
+            newLineCount: input.newLines.length,
+            maxLinesRendered: input.maxLinesRendered,
+            hasOverlays: input.hasOverlays,
+        });
+        if (beforeDiffPlan.kind !== "diff") {
+            return { frameInput, beforeDiffPlan };
+        }
+        const changedRange = this.patchEngine.findChangedRange({
+            previousLines: input.previousLines,
+            newLines: input.newLines,
+            height: frameInput.height,
+            previousViewportTop: frameInput.prevViewportTop,
+        });
+        const afterDiffPlan = this.planAfterDiff({
+            firstChanged: changedRange.firstChanged,
+            newLineCount: input.newLines.length,
+            previousLineCount: input.previousLines.length,
+            previousViewportTop: frameInput.prevViewportTop,
+            height: frameInput.height,
+        });
+        let deleteLinesPlan;
+        if (afterDiffPlan.kind === "deleteLines" && input.previousLines.length > input.newLines.length) {
+            const targetRow = Math.max(0, input.newLines.length - 1);
+            deleteLinesPlan = {
+                targetRow,
+                lineDiff: this.computeLineDiff({
+                    targetRow,
+                    hardwareCursorRow: frameInput.hardwareCursorRow,
+                    prevViewportTop: frameInput.prevViewportTop,
+                    viewportTop: frameInput.viewportTop,
+                }),
+                extraLines: input.previousLines.length - input.newLines.length,
+            };
+        }
+        return { frameInput, beforeDiffPlan, changedRange, afterDiffPlan, deleteLinesPlan };
+    }
+
     write(terminal, buffer) {
         return this.patchWriter.write(terminal, buffer);
     }

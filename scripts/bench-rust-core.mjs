@@ -116,6 +116,25 @@ function buildPatchOps(count) {
     ];
 }
 
+function buildFramePlanInput(count) {
+    const previousLines = Array.from({ length: count }, (_, index) => `line ${index}`);
+    const newLines = previousLines.map((line, index) => index % 97 === 0 ? `${line} changed` : line);
+    return {
+        terminalWidth: 120,
+        terminalHeight: 40,
+        previousWidth: 120,
+        previousHeight: 40,
+        previousViewportTop: Math.max(0, count - 40),
+        hardwareCursorRow: Math.max(0, count - 1),
+        previousLines,
+        newLines,
+        isTermux: false,
+        clearOnShrink: false,
+        maxLinesRendered: count,
+        hasOverlays: false,
+    };
+}
+
 const rgLines = buildRipgrepLines(10_000);
 const reports = [
     measure("rg JSON parse 10k lines single-call loop", () => rgLines.reduce((matches, line) => {
@@ -149,6 +168,11 @@ const reports = [
     measure("long transcript policy batch 5k", () => expectNative(runNativeCoreBatch(buildLongTranscriptOps(5_000)), "transcript batch").length),
     measure("queue compaction flush plan 2k", () => expectNative(runNativeCoreBatch(buildQueueOps(2_000)), "queue batch")[0].steps.length),
     measure("render frame diff plan 20k lines", () => expectNative(runNativeCoreBatch(buildPatchOps(20_000)), "patch batch").length),
+    measure("render frame pipeline plan 20k lines", () => expectNative(runNativeCoreValue({
+        core: "patch",
+        op: "planFramePatch",
+        input: buildFramePlanInput(20_000),
+    }), "frame pipeline plan").afterDiffPlan.kind),
 ];
 
 console.log(JSON.stringify({

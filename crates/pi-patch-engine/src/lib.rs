@@ -18,6 +18,7 @@ pub enum Operation {
     ComputeLineDiff(ComputeLineDiffInput),
     PlanBeforeDiff(PlanBeforeDiffInput),
     PlanAfterDiff(PlanAfterDiffInput),
+    PlanFramePatch(PlanFramePatchInput),
 }
 
 #[derive(Debug, Serialize)]
@@ -30,6 +31,7 @@ pub enum OperationResult {
     PreparedFrameInput(PreparedFrameInput),
     LineDiff(isize),
     FramePlan(FramePlan),
+    FramePatchPlan(Box<FramePatchPlan>),
 }
 
 pub fn execute(operation: Operation) -> OperationResult {
@@ -66,6 +68,9 @@ pub fn execute(operation: Operation) -> OperationResult {
         }
         Operation::PlanBeforeDiff(input) => OperationResult::FramePlan(plan_before_diff(&input)),
         Operation::PlanAfterDiff(input) => OperationResult::FramePlan(plan_after_diff(&input)),
+        Operation::PlanFramePatch(input) => {
+            OperationResult::FramePatchPlan(Box::new(plan_frame_patch(&input)))
+        }
     }
 }
 
@@ -650,5 +655,112 @@ pub fn plan_after_diff(input: &PlanAfterDiffInput) -> FramePlan {
         timing_kind: Some("diffRender"),
         new_viewport_top: None,
         previous_line_count: Some(input.previous_line_count),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanFramePatchInput {
+    pub terminal_width: usize,
+    pub terminal_height: usize,
+    pub previous_width: usize,
+    pub previous_height: usize,
+    pub previous_viewport_top: usize,
+    pub hardware_cursor_row: usize,
+    pub previous_lines: Vec<String>,
+    pub new_lines: Vec<String>,
+    pub is_termux: bool,
+    pub clear_on_shrink: bool,
+    pub max_lines_rendered: usize,
+    pub has_overlays: bool,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteLinesPlan {
+    pub target_row: usize,
+    pub line_diff: isize,
+    pub extra_lines: usize,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FramePatchPlan {
+    pub frame_input: PreparedFrameInput,
+    pub before_diff_plan: FramePlan,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub changed_range: Option<ChangedRange>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after_diff_plan: Option<FramePlan>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delete_lines_plan: Option<DeleteLinesPlan>,
+}
+
+pub fn plan_frame_patch(input: &PlanFramePatchInput) -> FramePatchPlan {
+    let frame_input = prepare_frame_input(&PrepareFrameInput {
+        terminal_width: input.terminal_width,
+        terminal_height: input.terminal_height,
+        previous_width: input.previous_width,
+        previous_height: input.previous_height,
+        previous_viewport_top: input.previous_viewport_top,
+        hardware_cursor_row: input.hardware_cursor_row,
+    });
+    let before_diff_plan = plan_before_diff(&PlanBeforeDiffInput {
+        previous_line_count: input.previous_lines.len(),
+        width_changed: frame_input.width_changed,
+        height_changed: frame_input.height_changed,
+        is_termux: input.is_termux,
+        clear_on_shrink: input.clear_on_shrink,
+        new_line_count: input.new_lines.len(),
+        max_lines_rendered: input.max_lines_rendered,
+        has_overlays: input.has_overlays,
+    });
+    if before_diff_plan.kind != "diff" {
+        return FramePatchPlan {
+            frame_input,
+            before_diff_plan,
+            changed_range: None,
+            after_diff_plan: None,
+            delete_lines_plan: None,
+        };
+    }
+
+    let changed_range = find_changed_range(&ChangedRangeInput {
+        previous_lines: input.previous_lines.clone(),
+        new_lines: input.new_lines.clone(),
+        height: frame_input.height,
+        previous_viewport_top: frame_input.prev_viewport_top,
+    });
+    let after_diff_plan = plan_after_diff(&PlanAfterDiffInput {
+        first_changed: changed_range.first_changed,
+        new_line_count: input.new_lines.len(),
+        previous_line_count: input.previous_lines.len(),
+        previous_viewport_top: frame_input.prev_viewport_top,
+        height: frame_input.height,
+    });
+    let delete_lines_plan = if after_diff_plan.kind == "deleteLines"
+        && input.previous_lines.len() > input.new_lines.len()
+    {
+        let target_row = input.new_lines.len().saturating_sub(1);
+        Some(DeleteLinesPlan {
+            target_row,
+            line_diff: compute_line_diff(
+                target_row,
+                frame_input.hardware_cursor_row,
+                frame_input.prev_viewport_top,
+                frame_input.viewport_top,
+            ),
+            extra_lines: input.previous_lines.len() - input.new_lines.len(),
+        })
+    } else {
+        None
+    };
+
+    FramePatchPlan {
+        frame_input,
+        before_diff_plan,
+        changed_range: Some(changed_range),
+        after_diff_plan: Some(after_diff_plan),
+        delete_lines_plan,
     }
 }
