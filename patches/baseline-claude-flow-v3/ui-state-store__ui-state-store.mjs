@@ -1,5 +1,16 @@
 import { AssistantMessageComponent, ThinkingStatusComponent } from "../tui-renderer/index.mjs";
 import { getSession } from "../runtime-host-adapter/index.mjs";
+import { runRustShadow } from "../../rust-core-shadow/runner.mjs";
+
+function runUiShadow({ name, op, input, jsValue }) {
+    return runRustShadow({
+        name,
+        commandEnv: "PI_UI_CORE_COMMAND",
+        op,
+        input,
+        jsValue,
+    });
+}
 
 export class UIStateStore {
     host;
@@ -16,7 +27,17 @@ export class UIStateStore {
         return getSession(this.host);
     }
     getWorkingLoaderMessage() {
-        return this.host.workingMessage ?? this.host.defaultWorkingMessage;
+        const result = this.host.workingMessage ?? this.host.defaultWorkingMessage;
+        runUiShadow({
+            name: "ui.workingLoaderMessage",
+            op: "workingLoaderMessage",
+            input: {
+                workingMessage: this.host.workingMessage,
+                defaultWorkingMessage: this.host.defaultWorkingMessage,
+            },
+            jsValue: result,
+        });
+        return result;
     }
     createWorkingLoader() {
         const message = this.host.workingMessage ?? "Waiting for model";
@@ -28,7 +49,17 @@ export class UIStateStore {
     }
     shouldShowThinkingStatus() {
         const session = this.getSession();
-        return session?.thinkingLevel !== "off" && !!session?.model?.reasoning;
+        const result = session?.thinkingLevel !== "off" && !!session?.model?.reasoning;
+        runUiShadow({
+            name: "ui.shouldShowThinkingStatus",
+            op: "shouldShowThinkingStatus",
+            input: {
+                thinkingLevel: session?.thinkingLevel,
+                modelHasReasoning: !!session?.model?.reasoning,
+            },
+            jsValue: result,
+        });
+        return result;
     }
     ensureResponseLoader() {
         if (this.host.thinkingStatus) {

@@ -1,4 +1,5 @@
 import { ToolFlowStore } from "../tool-flow-store/tool-flow-store.mjs";
+import { UIStateStore } from "../ui-state-store/ui-state-store.mjs";
 
 const command = process.env.PI_UI_CORE_COMMAND;
 if (!command) {
@@ -38,6 +39,16 @@ store.toolFlowByToolCallId.set("attached", {});
 const hiddenAttach = store.shouldAttachToolExecutionComponent(hiddenComponent);
 const forcedAttach = store.shouldAttachToolExecutionComponent(forcedComponent, true);
 const alreadyAttached = store.shouldAttachToolExecutionComponent(alreadyAttachedComponent, true);
+const uiState = new UIStateStore({
+    workingMessage: "Working",
+    defaultWorkingMessage: "Default",
+    session: {
+        thinkingLevel: "high",
+        model: { reasoning: true },
+    },
+});
+const workingMessage = uiState.getWorkingLoaderMessage();
+const showThinkingStatus = uiState.shouldShowThinkingStatus();
 
 console.log(JSON.stringify({
     ok: true,
@@ -45,4 +56,6 @@ console.log(JSON.stringify({
     hiddenAttach,
     forcedAttach,
     alreadyAttached,
+    workingMessage,
+    showThinkingStatus,
 }, null, 2));
