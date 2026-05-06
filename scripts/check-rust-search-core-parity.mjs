@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { SearchQueryBuilder } from "../search-indexer/search-query-builder.mjs";
+import { SearchContextFormatter } from "../search-indexer/search-context-formatter.mjs";
 import { SearchResultFormatter } from "../search-indexer/search-result-formatter.mjs";
 import { formatSize, truncateHead, truncateLine } from "../node_modules/@mariozechner/pi-coding-agent/dist/core/tools/truncate.js";
 
@@ -15,6 +16,23 @@ const formatter = new SearchResultFormatter({
     defaultMaxBytes: 50 * 1024,
     grepMaxLineLength: 500,
 });
+const contextFormatter = new SearchContextFormatter({
+    fsAdapter: {
+        async readFileLines(filePath) {
+            return contextFiles.get(filePath) ?? [];
+        },
+    },
+    pathAdapter: {
+        formatMatchPath(_searchPath, filePath) {
+            return filePath;
+        },
+    },
+    truncateLine,
+});
+const contextFiles = new Map([
+    ["src/main.rs", ["one", "two", "three"]],
+    ["src/long.rs", ["abcdef"]],
+]);
 
 function rust(op, input) {
     const result = spawnSync(exe, {
@@ -130,10 +148,65 @@ const cases = [
         entryLimitReached: false,
         defaultMaxBytes: 50 * 1024,
     }, ({ results, limit, entryLimitReached }) => formatter.formatDirectoryResults(results, limit, entryLimitReached)],
+    ["formatSingleLineContext", {
+        relativePath: "src/main.rs",
+        searchPath: ".",
+        filePath: "src/main.rs",
+        lineNumber: 2,
+        lineText: "two\r\n",
+        maxChars: 500,
+    }, ({ searchPath, filePath, lineNumber, lineText }) => contextFormatter.formatSingleLine({
+        searchPath,
+        filePath,
+        lineNumber,
+        lineText,
+        isDirectory: true,
+    })],
+    ["formatSingleLineContext", {
+        relativePath: "src/long.rs",
+        searchPath: ".",
+        filePath: "src/long.rs",
+        lineNumber: 1,
+        lineText: "abcdef",
+        maxChars: 3,
+    }, ({ lineNumber, lineText }) => {
+        const { text, wasTruncated } = truncateLine(lineText, 3);
+        return { line: `src/long.rs:${lineNumber}: ${text}`, linesTruncated: wasTruncated };
+    }],
+    ["formatBlockContext", {
+        relativePath: "src/main.rs",
+        searchPath: ".",
+        filePath: "src/main.rs",
+        lineNumber: 2,
+        contextValue: 1,
+        fileLines: ["one", "two", "three"],
+        maxChars: 500,
+    }, async ({ searchPath, filePath, lineNumber, contextValue }) => contextFormatter.formatBlock({
+        searchPath,
+        filePath,
+        lineNumber,
+        contextValue,
+        isDirectory: true,
+    })],
+    ["formatBlockContext", {
+        relativePath: "missing.rs",
+        searchPath: ".",
+        filePath: "missing.rs",
+        lineNumber: 4,
+        contextValue: 2,
+        fileLines: [],
+        maxChars: 500,
+    }, async ({ searchPath, filePath, lineNumber, contextValue }) => contextFormatter.formatBlock({
+        searchPath,
+        filePath,
+        lineNumber,
+        contextValue,
+        isDirectory: true,
+    })],
 ];
 
 for (const [name, input, expectedFn] of cases) {
-    assertEqual(name, rust(name, input), expectedFn(input));
+    assertEqual(name, rust(name, input), await expectedFn(input));
 }
 
 console.log(JSON.stringify({ ok: true, checked: cases.length }, null, 2));

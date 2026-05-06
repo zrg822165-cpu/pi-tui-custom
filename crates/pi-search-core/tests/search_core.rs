@@ -1,6 +1,7 @@
 use pi_search_core::{
-    FdArgsInput, FormatFindResultsInput, FormatTextSearchInput, RipgrepArgsInput,
-    TruncateHeadInput, TruncateLineInput, build_fd_args, build_ripgrep_args, format_find_results,
+    FdArgsInput, FormatBlockContextInput, FormatFindResultsInput, FormatSingleLineContextInput,
+    FormatTextSearchInput, RipgrepArgsInput, TruncateHeadInput, TruncateLineInput, build_fd_args,
+    build_ripgrep_args, format_block_context, format_find_results, format_single_line_context,
     format_text_search, truncate_head, truncate_line,
 };
 
@@ -104,4 +105,38 @@ fn format_find_results_reports_empty_results() {
 
     assert_eq!(result.content, "No files found matching pattern");
     assert!(result.details.is_none());
+}
+
+#[test]
+fn format_single_line_context_sanitizes_and_truncates() {
+    let result = format_single_line_context(&FormatSingleLineContextInput {
+        relative_path: "src/main.rs".into(),
+        line_number: 3,
+        line_text: "abcdef\r\n".into(),
+        max_chars: Some(3),
+    });
+
+    assert_eq!(result.line, "src/main.rs:3: abc... [truncated]");
+    assert!(result.lines_truncated);
+}
+
+#[test]
+fn format_block_context_marks_surrounding_lines() {
+    let result = format_block_context(&FormatBlockContextInput {
+        relative_path: "src/main.rs".into(),
+        line_number: 2,
+        context_value: 1,
+        file_lines: vec!["one".into(), "two".into(), "three".into()],
+        max_chars: Some(100),
+    });
+
+    assert_eq!(
+        result.lines,
+        [
+            "src/main.rs-1- one",
+            "src/main.rs:2: two",
+            "src/main.rs-3- three"
+        ]
+    );
+    assert!(!result.lines_truncated);
 }

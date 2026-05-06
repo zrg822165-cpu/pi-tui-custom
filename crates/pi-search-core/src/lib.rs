@@ -16,6 +16,8 @@ pub enum Operation {
     FormatTextSearch(FormatTextSearchInput),
     FormatFindResults(FormatFindResultsInput),
     FormatDirectoryResults(FormatDirectoryResultsInput),
+    FormatSingleLineContext(FormatSingleLineContextInput),
+    FormatBlockContext(FormatBlockContextInput),
 }
 
 #[derive(Debug, Serialize)]
@@ -26,6 +28,8 @@ pub enum OperationResult {
     TruncatedLine(TruncatedLine),
     Text(String),
     FormattedOutput(FormattedOutput),
+    ContextLine(ContextLine),
+    ContextBlock(ContextBlock),
 }
 
 pub fn execute(operation: Operation) -> OperationResult {
@@ -43,6 +47,12 @@ pub fn execute(operation: Operation) -> OperationResult {
         }
         Operation::FormatDirectoryResults(input) => {
             OperationResult::FormattedOutput(format_directory_results(&input))
+        }
+        Operation::FormatSingleLineContext(input) => {
+            OperationResult::ContextLine(format_single_line_context(&input))
+        }
+        Operation::FormatBlockContext(input) => {
+            OperationResult::ContextBlock(format_block_context(&input))
         }
     }
 }
@@ -450,5 +460,116 @@ fn formatted(
         } else {
             Some(serde_json::Value::Object(details))
         },
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FormatSingleLineContextInput {
+    pub relative_path: String,
+    pub line_number: usize,
+    pub line_text: String,
+    #[serde(default)]
+    pub max_chars: Option<usize>,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextLine {
+    pub line: String,
+    pub lines_truncated: bool,
+}
+
+pub fn format_single_line_context(input: &FormatSingleLineContextInput) -> ContextLine {
+    let normalized = input.line_text.replace("\r\n", "\n").replace('\r', "");
+    let sanitized = normalized
+        .strip_suffix('\n')
+        .unwrap_or(&normalized)
+        .to_owned();
+    let truncated = truncate_line(&TruncateLineInput {
+        line: sanitized,
+        max_chars: input.max_chars,
+    });
+    ContextLine {
+        line: format!(
+            "{}:{}: {}",
+            input.relative_path, input.line_number, truncated.text
+        ),
+        lines_truncated: truncated.was_truncated,
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FormatBlockContextInput {
+    pub relative_path: String,
+    pub line_number: usize,
+    pub context_value: usize,
+    pub file_lines: Vec<String>,
+    #[serde(default)]
+    pub max_chars: Option<usize>,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextBlock {
+    pub lines: Vec<String>,
+    pub lines_truncated: bool,
+}
+
+pub fn format_block_context(input: &FormatBlockContextInput) -> ContextBlock {
+    if input.file_lines.is_empty() {
+        return ContextBlock {
+            lines: vec![format!(
+                "{}:{}: (unable to read file)",
+                input.relative_path, input.line_number
+            )],
+            lines_truncated: false,
+        };
+    }
+
+    let start = if input.context_value > 0 {
+        input.line_number.saturating_sub(input.context_value).max(1)
+    } else {
+        input.line_number
+    };
+    let end = if input.context_value > 0 {
+        input
+            .file_lines
+            .len()
+            .min(input.line_number + input.context_value)
+    } else {
+        input.line_number
+    };
+    let mut lines = Vec::new();
+    let mut lines_truncated = false;
+    for current in start..=end {
+        let line_text = input
+            .file_lines
+            .get(current - 1)
+            .map_or("", String::as_str)
+            .replace('\r', "");
+        let truncated = truncate_line(&TruncateLineInput {
+            line: line_text,
+            max_chars: input.max_chars,
+        });
+        if truncated.was_truncated {
+            lines_truncated = true;
+        }
+        if current == input.line_number {
+            lines.push(format!(
+                "{}:{}: {}",
+                input.relative_path, current, truncated.text
+            ));
+        } else {
+            lines.push(format!(
+                "{}-{}- {}",
+                input.relative_path, current, truncated.text
+            ));
+        }
+    }
+    ContextBlock {
+        lines,
+        lines_truncated,
     }
 }
