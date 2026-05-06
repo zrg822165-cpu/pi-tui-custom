@@ -135,6 +135,27 @@ $env:PI_SEARCH_CORE_COMMAND = "<path-to-pi-search-core-exe>"
 node scripts/check-rust-search-core-parity.mjs
 ```
 
+## Queue Core Rust Migration
+
+`pi-queue-core` ports deterministic queue decisions that affect long-running
+model task continuity:
+
+- merging session queues with compaction queues;
+- restoring queued text back into the editor;
+- planning post-compaction flush order and whether each session call should be
+  awaited before continuing.
+
+JS still owns UI rendering, extension-command detection, session calls, and
+error recovery. Rust owns only the pure plan so compaction follow-up behavior
+stays testable and stable.
+
+Verification:
+
+```powershell
+$env:PI_QUEUE_CORE_COMMAND = "<path-to-pi-queue-core-exe>"
+node scripts/check-rust-queue-core-parity.mjs
+```
+
 ## Notes From Current Rust Research
 
 - Rust 1.95.0 is the current local stable and should be used as the migration

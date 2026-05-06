@@ -182,6 +182,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "pi-queue-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "pi-search-core"
 version = "0.1.0"
 dependencies = [
