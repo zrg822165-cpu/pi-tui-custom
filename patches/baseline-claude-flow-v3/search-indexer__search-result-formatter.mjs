@@ -1,3 +1,5 @@
+import { runRustShadow } from "../../rust-core-shadow/runner.mjs";
+
 export class SearchResultFormatter {
     truncateHead;
     formatSize;
@@ -44,7 +46,15 @@ export class SearchResultFormatter {
         }
         if (notices.length > 0)
             output += `\n\n[${notices.join(". ")}]`;
-        return { content: output, details: Object.keys(details).length > 0 ? details : undefined };
+        const result = { content: output, details: Object.keys(details).length > 0 ? details : undefined };
+        runRustShadow({
+            name: "search.formatTextSearch",
+            commandEnv: "PI_SEARCH_CORE_COMMAND",
+            op: "formatTextSearch",
+            input: { outputLines, effectiveLimit, matchLimitReached, linesTruncated, defaultMaxBytes: this.defaultMaxBytes, grepMaxLineLength: this.grepMaxLineLength },
+            jsValue: result,
+        });
+        return result;
     }
     formatFindResults(relativized, effectiveLimit, includeRefineNotice) {
         if (relativized.length === 0) {
@@ -68,7 +78,15 @@ export class SearchResultFormatter {
         if (notices.length > 0) {
             output += `\n\n[${notices.join(". ")}]`;
         }
-        return { content: output, details: Object.keys(details).length > 0 ? details : undefined };
+        const result = { content: output, details: Object.keys(details).length > 0 ? details : undefined };
+        runRustShadow({
+            name: "search.formatFindResults",
+            commandEnv: "PI_SEARCH_CORE_COMMAND",
+            op: "formatFindResults",
+            input: { relativized, effectiveLimit, includeRefineNotice, defaultMaxBytes: this.defaultMaxBytes },
+            jsValue: result,
+        });
+        return result;
     }
     formatDirectoryResults(results, limit, entryLimitReached) {
         if (results.length === 0) {
@@ -90,6 +108,14 @@ export class SearchResultFormatter {
         if (notices.length > 0) {
             output += `\n\n[${notices.join(". ")}]`;
         }
-        return { content: output, details: Object.keys(details).length > 0 ? details : undefined };
+        const result = { content: output, details: Object.keys(details).length > 0 ? details : undefined };
+        runRustShadow({
+            name: "search.formatDirectoryResults",
+            commandEnv: "PI_SEARCH_CORE_COMMAND",
+            op: "formatDirectoryResults",
+            input: { results, limit, entryLimitReached, defaultMaxBytes: this.defaultMaxBytes },
+            jsValue: result,
+        });
+        return result;
     }
 }

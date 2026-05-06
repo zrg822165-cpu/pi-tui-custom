@@ -1,4 +1,4 @@
-import { runRustShadow } from "../rust-core-shadow/runner.mjs";
+import { runRustShadow } from "../../rust-core-shadow/runner.mjs";
 
 export class SearchQueryBuilder {
     buildRipgrepArgs({ pattern, searchPath, glob, ignoreCase, literal }) {

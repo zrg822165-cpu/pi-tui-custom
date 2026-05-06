@@ -1,3 +1,5 @@
+import { runRustShadow } from "../../rust-core-shadow/runner.mjs";
+
 export class SearchContextFormatter {
     fsAdapter;
     pathAdapter;
@@ -42,7 +44,15 @@ export class SearchContextFormatter {
             else
                 block.push(`${relativePath}-${current}- ${truncatedText}`);
         }
-        return { lines: block, linesTruncated };
+        const result = { lines: block, linesTruncated };
+        runRustShadow({
+            name: "search.formatBlockContext",
+            commandEnv: "PI_SEARCH_CORE_COMMAND",
+            op: "formatBlockContext",
+            input: { relativePath, lineNumber, contextValue, fileLines: lines },
+            jsValue: result,
+        });
+        return result;
     }
     formatSingleLine({ searchPath, filePath, lineNumber, lineText, isDirectory }) {
         const relativePath = this.pathAdapter.formatMatchPath(searchPath, filePath, isDirectory);
@@ -51,9 +61,17 @@ export class SearchContextFormatter {
             .replace(/\r/g, "")
             .replace(/\n$/, "");
         const { text: truncatedText, wasTruncated } = this.truncateLine(sanitized);
-        return {
+        const result = {
             line: `${relativePath}:${lineNumber}: ${truncatedText}`,
             linesTruncated: wasTruncated,
         };
+        runRustShadow({
+            name: "search.formatSingleLineContext",
+            commandEnv: "PI_SEARCH_CORE_COMMAND",
+            op: "formatSingleLineContext",
+            input: { relativePath, lineNumber, lineText },
+            jsValue: result,
+        });
+        return result;
     }
 }
