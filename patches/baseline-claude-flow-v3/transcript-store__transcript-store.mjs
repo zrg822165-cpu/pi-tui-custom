@@ -1,8 +1,45 @@
 import { AssistantMessageComponent, BashExecutionComponent, BranchSummaryMessageComponent, CompactionSummaryMessageComponent, CustomMessageComponent, SkillInvocationMessageComponent, UserMessageComponent } from "../tui-renderer/index.mjs";
 import { Spacer } from "@mariozechner/pi-tui";
 import { parseSkillBlock } from "../node_modules/@mariozechner/pi-coding-agent/dist/core/agent-session.js";
+import { runRustShadow } from "../../rust-core-shadow/runner.mjs";
 import { Text } from "@mariozechner/pi-tui";
 import { theme } from "../node_modules/@mariozechner/pi-coding-agent/dist/modes/interactive/theme/theme.js";
+
+function runTranscriptShadow({ name, op, input, jsValue }) {
+    return runRustShadow({
+        name,
+        commandEnv: "PI_TRANSCRIPT_CORE_COMMAND",
+        op,
+        input,
+        jsValue,
+    });
+}
+
+export function assistantStopToolResult({ stopReason, retryAttempt = 0, errorMessage }) {
+    const result = stopReason === "aborted"
+        ? retryAttempt > 0
+            ? `Aborted after ${retryAttempt} retry attempt${retryAttempt > 1 ? "s" : ""}`
+            : "Operation aborted"
+        : errorMessage || "Error";
+    runTranscriptShadow({
+        name: "transcript.assistantStopToolResult",
+        op: "assistantStopToolResult",
+        input: { stopReason, retryAttempt, errorMessage },
+        jsValue: result,
+    });
+    return result;
+}
+
+export function compactionStatus({ compactionCount }) {
+    const result = compactionCount === 1 ? "Session compacted 1 time" : `Session compacted ${compactionCount} times`;
+    runTranscriptShadow({
+        name: "transcript.compactionStatus",
+        op: "compactionStatus",
+        input: { compactionCount },
+        jsValue: result,
+    });
+    return result;
+}
 
 export class TranscriptStore {
     adapter;
@@ -19,13 +56,28 @@ export class TranscriptStore {
     streamingComponent = undefined;
     streamingMessage = undefined;
     getVisibleTranscriptLineBudget() {
-        if (process.env.PI_TUI_VISIBLE_TRANSCRIPT !== "1") {
+        const enabled = process.env.PI_TUI_VISIBLE_TRANSCRIPT === "1";
+        const terminalRows = this.ui?.terminal?.rows ?? 24;
+        const multiplier = Number.parseFloat(process.env.PI_TUI_VISIBLE_TRANSCRIPT_MULTIPLIER ?? "4");
+        if (!enabled) {
+            runTranscriptShadow({
+                name: "transcript.visibleTranscriptLineBudget",
+                op: "visibleTranscriptLineBudget",
+                input: { enabled, terminalRows, multiplier },
+                jsValue: null,
+            });
             return undefined;
         }
-        const rows = Math.max(24, this.ui?.terminal?.rows ?? 24);
-        const multiplier = Number.parseFloat(process.env.PI_TUI_VISIBLE_TRANSCRIPT_MULTIPLIER ?? "4");
+        const rows = Math.max(24, terminalRows);
         const safeMultiplier = Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 4;
-        return Math.max(rows, Math.ceil(rows * safeMultiplier));
+        const result = Math.max(rows, Math.ceil(rows * safeMultiplier));
+        runTranscriptShadow({
+            name: "transcript.visibleTranscriptLineBudget",
+            op: "visibleTranscriptLineBudget",
+            input: { enabled, terminalRows, multiplier },
+            jsValue: result,
+        });
+        return result;
     }
     setTranscriptTailRendering(active) {
         if (process.env.PI_TUI_VISIBLE_TRANSCRIPT !== "1") {
@@ -37,18 +89,47 @@ export class TranscriptStore {
     }
     getUserMessageText(message) {
         if (message.role !== "user") {
+            runTranscriptShadow({
+                name: "transcript.userMessageText",
+                op: "userMessageText",
+                input: message,
+                jsValue: "",
+            });
             return "";
         }
         const textBlocks = typeof message.content === "string"
             ? [{ type: "text", text: message.content }]
             : message.content.filter((c) => c.type === "text");
-        return textBlocks.map((c) => c.text).join("");
+        const result = textBlocks.map((c) => c.text).join("");
+        runTranscriptShadow({
+            name: "transcript.userMessageText",
+            op: "userMessageText",
+            input: message,
+            jsValue: result,
+        });
+        return result;
     }
     messageHasVisibleText(message) {
-        return message?.content?.some((content) => content.type === "text" && content.text.trim()) ?? false;
+        const result = message?.content?.some((content) => content.type === "text" && content.text.trim()) ?? false;
+        const shadowInput = Array.isArray(message?.content) ? message : { role: message?.role ?? "", content: [] };
+        runTranscriptShadow({
+            name: "transcript.messageHasVisibleText",
+            op: "messageHasVisibleText",
+            input: shadowInput,
+            jsValue: result,
+        });
+        return result;
     }
     messageHasToolCall(message) {
-        return message?.content?.some((content) => content.type === "toolCall") ?? false;
+        const result = message?.content?.some((content) => content.type === "toolCall") ?? false;
+        const shadowInput = Array.isArray(message?.content) ? message : { role: message?.role ?? "", content: [] };
+        runTranscriptShadow({
+            name: "transcript.messageHasToolCall",
+            op: "messageHasToolCall",
+            input: shadowInput,
+            jsValue: result,
+        });
+        return result;
     }
     showStatus(message) {
         const children = this.adapter.getChatChildren();
@@ -156,8 +237,7 @@ export class TranscriptStore {
         const allEntries = this.sessionStore.getEntries();
         const compactionCount = allEntries.filter((entry) => entry.type === "compaction").length;
         if (compactionCount > 0) {
-            const times = compactionCount === 1 ? "1 time" : `${compactionCount} times`;
-            this.showStatus(`Session compacted ${times}`);
+            this.showStatus(compactionStatus({ compactionCount }));
         }
     }
     rebuildChatFromMessages() {
@@ -255,17 +335,11 @@ export class TranscriptStore {
                         const component = this.adapter.createToolExecutionComponent(content.name, content.id, content.arguments);
                         this.adapter.attachToolExecutionComponent(component);
                         if (message.stopReason === "aborted" || message.stopReason === "error") {
-                            let errorMessage;
-                            if (message.stopReason === "aborted") {
-                                const retryAttempt = this.sessionStore.getRetryAttempt();
-                                errorMessage =
-                                    retryAttempt > 0
-                                        ? `Aborted after ${retryAttempt} retry attempt${retryAttempt > 1 ? "s" : ""}`
-                                        : "Operation aborted";
-                            }
-                            else {
-                                errorMessage = message.errorMessage || "Error";
-                            }
+                            const errorMessage = assistantStopToolResult({
+                                stopReason: message.stopReason,
+                                retryAttempt: this.sessionStore.getRetryAttempt(),
+                                errorMessage: message.errorMessage,
+                            });
                             component.updateResult({ content: [{ type: "text", text: errorMessage }], isError: true });
                             this.adapter.updateToolFlowForToolCall(content.id);
                         }
