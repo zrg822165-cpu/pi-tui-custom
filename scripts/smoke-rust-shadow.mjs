@@ -4,11 +4,6 @@ import { parseRipgrepJsonLine } from "../search-indexer/search-process-adapter.m
 import { SearchResultFormatter } from "../search-indexer/search-result-formatter.mjs";
 import { formatSize, truncateHead, truncateLine } from "../node_modules/@mariozechner/pi-coding-agent/dist/core/tools/truncate.js";
 
-const command = process.env.PI_SEARCH_CORE_COMMAND;
-if (!command) {
-    throw new Error("Set PI_SEARCH_CORE_COMMAND to the Rust search core executable.");
-}
-
 process.env.PI_RUST_SHADOW = "1";
 process.env.PI_RUST_SHADOW_STRICT = "1";
 

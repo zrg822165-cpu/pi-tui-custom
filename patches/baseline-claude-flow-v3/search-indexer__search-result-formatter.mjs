@@ -1,4 +1,8 @@
-import { runRustShadow } from "../../rust-core-shadow/runner.mjs";
+import { runRustCoreValue, runRustShadow } from "../../rust-core-shadow/runner.mjs";
+
+function runSearchCore(op, input) {
+    return runRustCoreValue({ commandEnv: "PI_SEARCH_CORE_COMMAND", op, input });
+}
 
 export class SearchResultFormatter {
     truncateHead;
@@ -27,6 +31,11 @@ export class SearchResultFormatter {
         return this.truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
     }
     formatTextSearch(outputLines, { effectiveLimit, matchLimitReached, linesTruncated }) {
+        const input = { outputLines, effectiveLimit, matchLimitReached, linesTruncated, defaultMaxBytes: this.defaultMaxBytes, grepMaxLineLength: this.grepMaxLineLength };
+        const rust = runSearchCore("formatTextSearch", input);
+        if (rust.ok) {
+            return rust.value;
+        }
         const rawOutput = outputLines.join("\n");
         const truncation = this.truncateOutput(rawOutput);
         let output = truncation.content;
@@ -51,12 +60,17 @@ export class SearchResultFormatter {
             name: "search.formatTextSearch",
             commandEnv: "PI_SEARCH_CORE_COMMAND",
             op: "formatTextSearch",
-            input: { outputLines, effectiveLimit, matchLimitReached, linesTruncated, defaultMaxBytes: this.defaultMaxBytes, grepMaxLineLength: this.grepMaxLineLength },
+            input,
             jsValue: result,
         });
         return result;
     }
     formatFindResults(relativized, effectiveLimit, includeRefineNotice) {
+        const input = { relativized, effectiveLimit, includeRefineNotice, defaultMaxBytes: this.defaultMaxBytes };
+        const rust = runSearchCore("formatFindResults", input);
+        if (rust.ok) {
+            return rust.value;
+        }
         if (relativized.length === 0) {
             return { content: "No files found matching pattern", details: undefined };
         }
@@ -83,12 +97,17 @@ export class SearchResultFormatter {
             name: "search.formatFindResults",
             commandEnv: "PI_SEARCH_CORE_COMMAND",
             op: "formatFindResults",
-            input: { relativized, effectiveLimit, includeRefineNotice, defaultMaxBytes: this.defaultMaxBytes },
+            input,
             jsValue: result,
         });
         return result;
     }
     formatDirectoryResults(results, limit, entryLimitReached) {
+        const input = { results, limit, entryLimitReached, defaultMaxBytes: this.defaultMaxBytes };
+        const rust = runSearchCore("formatDirectoryResults", input);
+        if (rust.ok) {
+            return rust.value;
+        }
         if (results.length === 0) {
             return { content: "(empty directory)", details: undefined };
         }
@@ -113,7 +132,7 @@ export class SearchResultFormatter {
             name: "search.formatDirectoryResults",
             commandEnv: "PI_SEARCH_CORE_COMMAND",
             op: "formatDirectoryResults",
-            input: { results, limit, entryLimitReached, defaultMaxBytes: this.defaultMaxBytes },
+            input,
             jsValue: result,
         });
         return result;
